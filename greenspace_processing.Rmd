@@ -1,0 +1,149 @@
+---
+title: "Paris_green_space_processing"
+author: "Jo Garrett"
+date: '2024-02-22'
+output: word_document
+---
+
+```{r libraries, echo = FALSE}
+library(terra)
+library(dplyr)
+library(sf)
+library(nngeo)
+
+```
+
+## 1. Read in data
+## 2. Exclude spaces that are planned
+```{r read_data, echo = FALSE}
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\green-spaces-woods-open-or-planned-to-open-to-the-public")
+greenspaces_raw<-vect("espaces-verts-et-boises-surfaciques-ouverts-ou-en-projets-douverture-au-public.shp") %>%
+  makeValid()
+
+## Exclude projects which are planned
+ind<-which(greenspaces_raw$categlib!="Espace vert en projet")
+
+greenspaces_open<-greenspaces_raw[ind,]
+rm(ind, greenspaces_raw)
+#writeVector(greenspaces_open, "greenspaces_open.shp")
+
+```
+
+
+## 3. Join together spaces that are <30 m apart
+```{r within_30m, echo = FALSE}
+
+## Add a 15 m buffer to each space
+greenspaces_buff<-terra::buffer( greenspaces_open,width=15) %>%
+  ## Combine overlapping spaces
+  terra::aggregate() %>%
+  ## fill any holes 
+    fillHoles() %>%
+  ## remove the 15 m buffer, such that spaces within 30 m are now joined 
+  terra::buffer( width=(-15)) %>%
+  ## disaggregate dataset such that there is an individual record for each polygon
+  terra::disagg()
+
+
+rm(greenspaces_open)
+greenspaces_buff$area_terra<-expanse(greenspaces_buff)
+```
+
+## 4. Find the distance to the nearest green space
+```{r find_nearest_distance, echo = FALSE}
+
+greenspaces_sf <- sf::st_as_sf(greenspaces_buff)
+
+
+nn <- st_nn(greenspaces_sf,y = greenspaces_sf, k = 2, maxdist = 500)  # Finding 2 nearest neighbors, the first one will be itself
+
+# Custom function to extract second subelement or return NA
+extract_second_element <- function(x) {
+  if (length(x) == 2) {
+    return(x[[2]])
+  } else {
+    return(NA)
+  }
+}
+
+# Find index for nearest neighbour
+nearest_neighbour <- sapply(nn, extract_second_element)
+rm(nn,extract_second_element)
+
+greenspaces_proj<-project(greenspaces_buff,"EPSG:2154")
+# Calculate distance to nearest neighbour
+for (i in 1:NROW(greenspaces_proj)){
+    if (is.na(nearest_neighbour[i])==TRUE){
+      greenspaces_proj$nearest_dist[i]<-501
+    }else {
+      greenspaces_proj$nearest_dist[i]<-terra::distance(greenspaces_proj[i,],greenspaces_proj[nearest_neighbour[i],])
+    }
+  }
+
+rm(nearest_neighbour)
+
+```
+
+## 5. Find the distance to the nearest water body
+```{r find_nearest_water_body, echo = FALSE}
+water_bodies<-st_read("water_paris_polygon_osm.shp") %>%
+  st_make_valid()
+
+nn <- st_nn(greenspaces_sf,y = water_bodies, k = 1, maxdist = 500)  # Finding nearest neighbors
+
+# Custom function to extract first subelement or return NA
+extract_first_element <- function(x) {
+  if (length(x) == 1) {
+    return(x[[1]])
+  } else {
+    return(NA)
+  }
+}
+
+## Find nearest neighbour
+nearest_neighbour <- sapply(nn, extract_first_element )
+rm(nn,extract_first_element )
+
+water_vect<-vect(water_bodies) %>%
+  project("epsg:2154")
+  
+
+## Find distance to nearest neighbour
+greenspaces_proj$water_dist<-NA
+for (i in 1:NROW(greenspaces_proj)){
+    if (is.na(nearest_neighbour[i])==TRUE){
+      greenspaces_proj$water_dist[i]<-501
+    }else {
+      greenspaces_proj$water_dist[i]<-terra::distance(greenspaces_proj[i,],water_vect[nearest_neighbour[i],])
+    }
+  }
+
+rm(nearest_neighbour)
+
+```
+
+## 6. Select green spaces within the four central departments of Paris
+```{r read_central, echo =FALSE}
+
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+central_region<-vect("central_departments.shp") 
+crs(central_region)<-"EPSG:2154"
+
+## Dissolve the four central departments into one polygon
+central_dis<-terra::aggregate(central_region)
+
+## Find where green spaces intersect or are within the four central departments
+relates_ind<-relate(greenspaces_proj, central_dis, relation=c("intersects", "within"))
+greenspaces_central<-greenspaces_proj[relates_ind] %>%
+  makeValid()
+rm(relates_ind)
+
+rm(central_dis, central_region)
+
+writeVector(greenspaces_central, "greenspaces_central.shp")
+```
+
+
+
+
+
