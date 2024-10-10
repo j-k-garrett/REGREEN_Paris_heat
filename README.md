@@ -23,3 +23,12 @@ Code is currently not reproducible as the data is not included
 - Finds maximum cooling distance and temperature difference between the greenspace boundary and maximum cooling distance for all green spaces in this subset
 - Saves results
 
+`step_1_modelling.rmd`
+- Reads in results from step_1_subset
+- Presents descriptives for model variables
+- Runs Generalised Additive Model (GAM) to explore nature of relationship between predictors (area and NDVI) and cooling outcomes (maximum cooling distance and temperature difference)
+- Run linear modelling predicting cooling outcomes by predictors
+- Present figures of the data and modelling outcome
+Step 2
+- Calculate cooling effect for all green spaces in Paris >1,000m2 from the model coefficients
+- Calculate the population benefiting from the cooling of all green spaces

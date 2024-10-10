@@ -1,0 +1,843 @@
+---
+title: "Step_1_modelling"
+author: "Jo Garrett"
+date: '2023-12-21'
+output: word_document
+---
+```{r libraries, message=FALSE, echo=FALSE, warning=FALSE}
+library(dplyr)
+library(plyr)
+library(huxtable)
+library(ggplot2)
+library(tidyr)
+library(gtsummary)
+library(tibble)
+library(rsq)
+library(lmerTest)
+library(mgcv)
+library(cowplot)
+library(lmtest)
+library(gratia)
+library(terra)
+library(tidyterra)
+```
+## Step 1 - modelling
+
+
+```{r table_functions, echo = FALSE}
+
+## Create custom functions for presenting model results
+glm_tbl_regression<-function(model_output){
+  tbl_regression(model_output,
+                 intercept = TRUE,
+                 estimate_fun= function(x)
+                   style_number(x, digits = 2), pvalue_fun=function(x) style_number(x, digits = 3)) %>%
+    bold_p() %>%
+    add_significance_stars(hide_ci = FALSE, hide_se= TRUE) %>%
+    add_glance_table(label = list(AIC~"AIC", Rsq~"R2"),
+                     include=c(AIC, nobs, Rsq),
+                     glance_fun = function(x) glance(x) %>%
+                       add_column(Rsq= rsq(x)))
+}
+
+my_tidy <- function(model_output) {
+tidy<-broom.mixed::tidy(model_output, conf.int = TRUE,  exponentiate = FALSE, conf.level = 0.95) %>%
+  select(-effect, -group, -df) %>%
+  filter(!row_number() %in% c(4:5))
+return(tidy)
+
+}
+lmer_tbl_regression<-function(model_output){
+  tbl_regression(model_output,
+                 tidy_fun = broom.mixed::tidy,
+                 intercept = TRUE,
+                 estimate_fun= function(x)
+                   style_number(x, digits = 2)) %>%
+   add_significance_stars(hide_ci = FALSE, hide_se= TRUE) %>%
+    add_glance_table(label = list(AIC~"AIC", Rsq~"R2"),
+                     include=c(AIC, nobs, Rsq),
+                     glance_fun = function(x) glance(x) %>%
+                       add_column(Rsq= unlist(rsq(x)[1])))
+}
+
+```
+
+
+```{r read_data, echo = FALSE}
+
+## Read in data
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+step_1_results<-read.csv("step_1_resuts_575_150m_15042024.csv")
+```
+
+## Descriptives
+
+```{r descriptives_area_ndvi, echo = FALSE}
+print("Range green space area")
+range(step_1_results$park_area)
+print("Range green space NDVI")
+range(step_1_results$NDVI)
+
+## Create categories of greenspace area
+brks<-c( 1000,5000, 10000, 100000,
+        max(step_1_results$park_area, na.rm = TRUE))
+labels<-c( "1,000 - <5,000",
+          "5,000 - <10,000",
+          "10,000 - <100,000","100,000 - <1,000,000")
+
+step_1_results$area_cat<-cut(step_1_results$park_area,breaks=brks,labels = labels, right = FALSE,
+                           include.lowest =TRUE)
+
+rm(brks, labels)
+
+## Create categories for NDVI value
+brks<-c( 0.2, 0.3,0.4,0.5,
+        max(step_1_results$NDVI, na.rm = TRUE))
+labels<-c( "0.2 - <0.3", "0.3 - <0.4", "0.4 - <0.5", "0.5 - <0.65")
+
+step_1_results$NDVI_cat<-cut(step_1_results$NDVI,breaks=brks,labels = labels, right = FALSE,
+                           include.lowest =TRUE)
+
+rm(brks, labels)
+
+## calculate descriptives two-way table for area and NDVI
+tbl_area_ndvi<-table(step_1_results$area_cat, step_1_results$NDVI_cat) %>%
+  as.data.frame() %>%
+  pivot_wider(names_from = "Var2", values_from = "Freq") %>%
+  as_huxtable()
+
+tbl_area_ndvi
+
+rm(tbl_area_ndvi)
+```
+### Which spaces have no cooling?
+```{r spaces_no_cooling, echo = FALSE}
+
+## find which spaces have exhibit no cooling effect 
+ind_0_191<-which(step_1_results$Max_dist_191==0)
+ind_0_203<-which(step_1_results$Max_dist_203==0)
+ind_0_205<-which(step_1_results$Max_dist_205==0)
+
+print("Number of spaces with no cooling on 10th July")
+length(ind_0_191)
+
+print("Percentage of spaces with no cooling on 10th July")
+length(ind_0_191)/NROW(step_1_results)*100
+print("Number of spaces with no cooling on 22nd July")
+length(ind_0_203)
+print("Percentage of spaces with no cooling on 22nd July")
+length(ind_0_203)/NROW(step_1_results)*100
+print("Number of spaces with no cooling on 24th July")
+length(ind_0_205)
+print("Percentage of spaces with no cooling on 24th July")
+length(ind_0_205)/NROW(step_1_results)*100
+
+rm(ind_0_191, ind_0_203, ind_0_205)
+
+```
+
+### NDVI descriptive plot
+```{r descriptives, echo = FALSE, eval = FALSE}
+
+## Present boxplot of NDVI values by greenspace area category
+mean_NDVI <- ddply(step_1_results, "area_cat", summarise, Mean.NDVI=mean(NDVI), sd.NDVI = sd(NDVI), median.ndvi = median(NDVI), lwr.prc=quantile(NDVI, probs = 0.25),upr.prc=quantile(NDVI, probs = 0.75) )
+mean_NDVI
+rm(mean_NDVI)
+
+p<-ggplot(data=step_1_results, aes(x =area_cat, y = NDVI ))+
+  geom_boxplot(notch = FALSE)+
+  theme_minimal() +
+  ylab("NDVI")+
+  xlab(expression("Greenspace area (m"^2~")"))+
+  theme(axis.text.x = element_text(angle = 20, vjust =0.5, hjust = 0.5))
+p
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("boxplot_ndvi.png", dpi = 600, width = 4.5, height = 3.5)
+rm( p)
+```
+
+
+
+###  Cooling distance and temperature difference descriptives
+
+```{r descriptives_cooling, echo = FALSE}
+print("Median maximum cooling distance 10th July")
+median(step_1_results$Max_dist_191)
+print("Median maximum cooling distance 22nd July")
+median(step_1_results$Max_dist_203)
+print("Median maximum cooling distance 24th July")
+median(step_1_results$Max_dist_205)
+
+print("Maximum maximum cooling distance 10th July")
+max(step_1_results$Max_dist_191)
+print("Maximum maximum cooling distance 22nd July")
+max(step_1_results$Max_dist_203)
+print("Maximum maximum cooling distance 24th July")
+max(step_1_results$Max_dist_205)
+
+print("Median temperature difference 10th July")
+median(step_1_results$temp_diff_191)
+print("Median temperature difference 22nd July")
+median(step_1_results$temp_diff_203)
+print("Median temperature difference 24th July")
+median(step_1_results$temp_diff_205)
+
+print("Maximum temperature difference  10th July")
+max(step_1_results$temp_diff_191)
+print("Maximum temperature difference  22nd July")
+max(step_1_results$temp_diff_203)
+print("Maximum temperature difference  24th July")
+max(step_1_results$temp_diff_205)
+
+## Presents descriptives table for maximum cooling distance
+step_1_results_long<-pivot_longer(step_1_results, 
+                                  cols = c(Max_dist_191, Max_dist_203, Max_dist_205), names_to = "Day", values_to = "Max_dist")
+step_1_results_long$Day<-gsub("Max_dist_", "", step_1_results_long$Day)
+
+cooling_dist_descriptives<-step_1_results_long %>%
+  ddply( c("Day","area_cat"), summarise,  grp.median=median(Max_dist)) %>% pivot_wider(names_from = Day, values_from = grp.median) %>%
+  as_huxtable()
+print("Maximum cooling distance descriptives")
+cooling_dist_descriptives
+
+## Presents descriptives table for temperature difference
+step_1_results_long<-pivot_longer(step_1_results, 
+                                  cols = c(temp_diff_191, temp_diff_203, temp_diff_205), names_to = "Day", values_to = "Temp_diff")
+step_1_results_long$Day<-gsub("temp_diff_", "", step_1_results_long$Day)
+
+temp_diff_descriptives<-step_1_results_long %>%
+  ddply( c("Day","area_cat"), summarise,  grp.median=median( Temp_diff)) %>%
+ pivot_wider(names_from = Day, values_from = c(grp.median)) %>%
+  as_huxtable()
+number_format(temp_diff_descriptives)<-3
+
+print("Temperature difference descriptives")
+temp_diff_descriptives
+
+rm(temp_diff_descriptives, cooling_dist_descriptives, step_1_results_long)
+```
+
+### Distribution of modelling variables
+```{r modelling_distance, echo = FALSE}
+
+plot(density(step_1_results$Max_dist_191), main = "Distribution of maximum cooling distance")
+plot(density((log10(step_1_results$Max_dist_191)+1)))
+
+plot(density(step_1_results$park_area), main = "Distribution of park area")
+plot(density(log10(step_1_results$park_area)), main ="log10 transformed distribution of park area")
+
+plot(density(step_1_results$NDVI))
+```
+
+
+## Modelling
+### Generalised additive model
+```{r gam_relationship, echo = FALSE}
+
+## Runs GAM predicting maximum cooling distance (transformed) for one day by green space area and NDVI
+gam_model<-gam(log10(Max_dist_191+1)~ s(log10(park_area)) + s(NDVI), data = step_1_results)
+
+## Presents plot predicting outcome by area
+p1 <- gratia::draw(gam_model, select = "s(log10(park_area))") +
+   theme_minimal()+
+   xlab(expression("log"[10]*"(Area (m"^2*"))"))+
+   ggtitle("a")
+ 
+## Presents plot predicting outcome by NDVI
+p2 <- gratia::draw(gam_model, select = "s(NDVI)") +
+   theme_minimal()+
+   xlab("NDVI")+
+   ggtitle("b")
+ 
+plot_grid(p1, p2)
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("gam_plots_maximum_cool_dist.png", width = 7.5, height = 4, units ="in")
+summary(gam_model)
+
+rm(gam_model, p1, p2)
+
+print("Gam model results indicate a quadratic relationship for NDVI only")
+```
+
+### Linear modelling- maximum cooling distance
+
+```{r linear_model, echo = FALSE}
+## Prepares data for modelling
+step_1_results_long_dist<-pivot_longer(step_1_results,
+                                  cols = c(Max_dist_191, Max_dist_203,Max_dist_205),
+                                  names_to = "Day", values_to ="Max_dist",  names_prefix = "Max_dist_")
+
+## Models maximum cooling distance by green space area and NDVI including a quadratic relationship for NDVI and interactions between both predictors and day 
+lm_cd_int<- lm(log10(Max_dist+1) ~ log10(park_area)+ log10(park_area):Day + NDVI + I(NDVI^2)+ Day + I(NDVI^2):Day + NDVI:Day,data = step_1_results_long_dist)
+
+## Prepare results table
+lm_cd_int_tbl <- glm_tbl_regression(lm_cd_int)
+
+## Models maximum cooling distance by green space area and NDVI including a quadratic relationship for NDVI for each day separately
+lm_cd_191<-lm(log10(Max_dist_191+1)~(log10(park_area)) + NDVI + I(NDVI^2),data=step_1_results)
+lm_cd_203<-lm(log10(Max_dist_203+1)~(log10(park_area))  + NDVI + I(NDVI^2),data=step_1_results)
+lm_cd_205<-lm(log10(Max_dist_205+1)~(log10(park_area))  + NDVI + I(NDVI^2),data=step_1_results)
+
+## Prepare results tables
+lm_cd_191_tbl<-glm_tbl_regression(lm_cd_191)
+lm_cd_203_tbl<-glm_tbl_regression(lm_cd_203)
+lm_cd_205_tbl<-glm_tbl_regression(lm_cd_205)
+
+## Models maximum cooling distance by green space area and NDVI including a quadratic relationship for NDVI with a random effect for day
+lm_cd_re<-lmer(log10(Max_dist+1)~(log10(park_area)) +   NDVI + I(NDVI^2) + (1| Day),data=step_1_results_long_dist)
+
+## Prepare results table
+lm_cd_re_tbl<-lmer_tbl_regression(lm_cd_re)
+
+## merge all maximum cooling distance model results tables together
+t_merge<-tbl_merge(list(lm_cd_int_tbl,lm_cd_re_tbl, lm_cd_191_tbl, lm_cd_203_tbl, lm_cd_205_tbl), tab_spanner=c("With int","With RE", "Day_191", "Day_203", "Day_205")) %>%
+  modify_table_body(~.x %>% arrange(row_type=="glance_statistic")) %>%
+  as_flex_table() 
+
+# print maximum cooling distance model results table
+t_merge
+rm(t_merge, lm_cd_191_tbl, lm_cd_203_tbl, lm_cd_205_tbl,  lm_cd_int_tbl)
+
+# Print equation predicting maximum cooling distance by predictors and their coefficients
+print(paste("log10(Maximum cooling distance (m) +1) = (", coef(lm_cd_re)[[1]][1,2]," x log10(area (m^2))) + (", (coef(lm_cd_re)[[1]][1,3]), " X NDVI) + (", coef(lm_cd_re)[[1]][1,4], " X (NDVI)^2) ",coef(lm_cd_re)[[1]][1,1], sep = ""))
+
+rm(lm_cd_191, lm_cd_203, lm_cd_205, lm_cd_int)
+
+```
+
+### Linear modelling-  temperature difference
+```{r modelling_temp_diff, echo = FALSE}
+
+## Prepare data for modelling
+step_1_results_long_temp<-pivot_longer(step_1_results,cols = c(temp_diff_191, temp_diff_203, temp_diff_205), names_to = "Day", values_to ="temp_diff",  names_prefix = "temp_diff_")
+
+# Check distributions
+plot(density(step_1_results_long_temp$temp_diff))
+plot(density(log10(step_1_results_long_temp$temp_diff)))
+print("transforming by log10 does not really improve the distribution, therefore, will retain as untransformed")
+
+## Exploring nature of relationship between green space area and NDVI and the outcome temperature difference
+gam_model<-gam(temp_diff_191~ s(log10(park_area)) + s(NDVI), data = step_1_results)
+
+p1 <- gratia::draw(gam_model, select = "s(log10(park_area))") +
+   theme_minimal()+
+   xlab(expression("log"[10]*"(Area (m"^2*"))"))+
+   ggtitle("c")
+ 
+p2 <- gratia::draw(gam_model, select = "s(NDVI)") +
+   theme_minimal()+
+   xlab("NDVI")+
+   ggtitle("d")
+ 
+plot_grid(p1, p2)
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("gam_plots_temp_diff.png", width = 7.5, height = 4, units ="in")
+
+summary(gam_model)
+rm(gam_model, p1, p2)
+print("Gam results indicate a quadratic relationship for both NDVI and park area")
+
+print("Let's test whether including quadratics fit better")
+lm_td_191_none<-lm(temp_diff_191~(log10(park_area))  + NDVI, data=step_1_results)
+lm_td_191_park<-lm(temp_diff_191~(log10(park_area)) + I((log10(park_area))^2) + NDVI, data=step_1_results)
+lm_td_191_ndvi<-lm(temp_diff_191~(log10(park_area)) + NDVI + I(NDVI^2), data=step_1_results)
+lm_td_191_all<-lm(temp_diff_191~(log10(park_area)) + I((log10(park_area))^2) + NDVI + I(NDVI^2), data=step_1_results)
+lm_td_191_quad_park_only<-lm(temp_diff_191~  I((log10(park_area))^2) + NDVI + I(NDVI^2), data=step_1_results)
+AIC_models<-c(AIC(lm_td_191_none), AIC(lm_td_191_park), AIC(lm_td_191_ndvi), AIC(lm_td_191_all))
+AIC_models
+print("With both fits best and is significiantly different")
+rm(AIC_models)
+lrtest(lm_td_191_none, lm_td_191_park, lm_td_191_ndvi, lm_td_191_all)
+rm(lm_td_191_none, lm_td_191_park, lm_td_191_ndvi, lm_td_191_all, lm_td_191_quad_park_only)
+
+print("They are all significantly different and the one with both NDVI and park area having quadratics fits better")
+
+## Linear model predicting temperature difference between greenspace area and NDVI. A quadratic term is included for both green space area and NDVI. An interaction term is included for day
+lm_td_int<- lm(temp_diff~ log10(park_area)+ log10(park_area):Day + I((log10(park_area))^2) + I((log10(park_area))^2):Day + NDVI + I(NDVI^2) +  NDVI:Day + Day + I(NDVI^2):Day,data = step_1_results_long_temp)
+## prepare table 
+lm_td_int_tbl <- glm_tbl_regression(lm_td_int)
+
+## Linear model predicting temperature difference between greenspace area and NDVI. A quadratic term is included for both green space area and NDVI for each day separately
+lm_td_191<-lm(temp_diff_191~(log10(park_area)) + I((log10(park_area))^2) +  NDVI + I(NDVI^2), data=step_1_results)
+lm_td_203<-lm(temp_diff_203~(log10(park_area)) + I((log10(park_area))^2) +  NDVI + I(NDVI^2),data=step_1_results)
+lm_td_205<-lm(temp_diff_205~(log10(park_area)) + I((log10(park_area))^2) +  NDVI + I(NDVI^2),data=step_1_results)
+## Prepare model results tables
+lm_td_191_tbl<-glm_tbl_regression(lm_td_191)
+lm_td_203_tbl<-glm_tbl_regression(lm_td_203)
+lm_td_205_tbl<-glm_tbl_regression(lm_td_205)
+
+## Linear model predicting temperature difference by greenspace area and NDVI includingquadratic terms for both greenspace and NDVI and a random effect for day. 
+lm_td_re<-lmer(temp_diff~(log10(park_area)) +I((log10(park_area))^2) +  NDVI + I(NDVI^2) + (1| Day),data=step_1_results_long_temp)
+# Prepare model results table
+lm_td_re_tbl<-lmer_tbl_regression(lm_td_re)
+
+## Combine model results tables predicting temperature difference
+t_merge<-tbl_merge(list(lm_td_int_tbl,lm_td_re_tbl, lm_td_191_tbl, lm_td_203_tbl, lm_td_205_tbl), tab_spanner=c("With int","With RE", "Day_191", "Day_203", "Day_205")) %>%
+  modify_table_body(~.x %>% arrange(row_type=="glance_statistic")) %>%
+  as_flex_table() 
+# print full model results table
+t_merge
+
+print("Table for manuscript")
+t_merge<-tbl_merge(list(lm_cd_re_tbl,lm_td_re_tbl), tab_spanner=c("Max cooling dist", "Temp diff")) %>%
+  modify_table_body(~.x %>% arrange(row_type=="glance_statistic")) %>%
+  as_flex_table() 
+
+t_merge
+rm(t_merge, lm_td_191_tbl, lm_td_203_tbl, lm_td_205_tbl, lm_td_int_tbl, lm_td_re_tbl,  lm_cd_re_tbl)
+
+# print equation predicting temperature difference by greenspace area and NDVI including coefficients
+print(paste0("Temperature difference (°C) = (", coef(lm_td_re)[[1]][1,2], " x log10(area (m^2)) + (", coef(lm_td_re)[[1]][1,3]," x log10(area^2 (m^2))) + (",   coef(lm_td_re)[[1]][1,4], " x NDVI) + (", coef(lm_td_re)[[1]][1,5], " x NDVI^2) + ",  coef(lm_td_re)[[1]][1,1])) 
+
+rm(lm_td_191, lm_td_203, lm_td_205, lm_td_int)
+```
+
+## Plots
+```{r plotting, echo = FALSE}
+color_pal<-c("brown4", "brown2", "darkgoldenrod1", "dodgerblue", "darkblue")
+
+p_all_dist_by_area<-ggplot(step_1_results_long_dist, aes(x = park_area, y = Max_dist, colour = Day))+
+ geom_point(aes(shape = Day),  size = 1)+
+  theme_minimal()+
+  scale_colour_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+   scale_shape_manual(values=c(1, 3,4), labels = c("10th July", "22nd July", "24th July"))+
+  xlab(bquote('Area '(m^2)))+
+  ylab("Maximum cooling distance (m)")+
+   scale_x_log10(limits = c(800,  600000), labels = scales::label_comma()) +
+    ylim(c(0, max(pretty(step_1_results_long_dist$Max_dist))))+
+  ggtitle("a)")
+
+
+p_all_dist_by_NDVI<-ggplot(step_1_results_long_dist, aes(x = NDVI, y = Max_dist, colour = Day))+
+ geom_point(aes(shape = Day),  size = 1)+
+  theme_minimal()+
+  scale_colour_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+   scale_shape_manual(values=c(1, 3,4), labels = c("10th July", "22nd July", "24th July"))+
+  xlab("NDVI")+
+  ylab("Maximum cooling distance (m)")+
+  xlim(c(min(pretty(step_1_results_long_dist$NDVI)), max(pretty(step_1_results_long_dist$NDVI))))+
+  ylim(c(0, max(pretty(step_1_results_long_dist$Max_dist)))) +
+  ggtitle("b)")
+
+
+p_all_temp_by_area<-ggplot(step_1_results_long_temp, aes(x = park_area, y = temp_diff, colour = Day))+
+ geom_point(aes(shape = Day),  size = 1)+
+  theme_minimal()+
+  scale_colour_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+   scale_shape_manual(values=c(1, 3,4), labels = c("10th July", "22nd July", "24th July"))+
+    xlab(bquote('Area '(m^2)))+
+  ylab("Temperature difference (°C)")+
+   scale_x_log10(limits = c(800,  600000), labels = scales::label_comma()) +
+    ylim(c(0, max(pretty(step_1_results_long_temp$temp_diff)))) +
+  theme(plot.margin = unit(c(0.5,0.5,0.5,1), "cm"))+
+  ggtitle("c)")
+
+
+p_all_temp_by_NDVI<-ggplot(step_1_results_long_temp, aes(x = NDVI, y = temp_diff, colour = Day))+
+ geom_point(aes(shape = Day),  size = 1 )+
+ # geom_point(position = "jitter",)+
+  theme_minimal()+
+  scale_colour_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+   scale_shape_manual(values=c(1, 3,4), labels = c("10th July", "22nd July", "24th July"))+
+  xlab("NDVI")+
+  ylab("Temperature difference (°C)")+
+  xlim(c(min(pretty(step_1_results_long_temp$NDVI)), max(pretty(step_1_results_long_temp$NDVI))))+
+  ylim(c(-0.05, max(pretty(step_1_results_long_temp$temp_diff))))+
+  theme(plot.margin = unit(c(0.5,0.5,0.5,1), "cm")) +
+  ggtitle("d)")
+
+#structure of equation for line
+#line_dist_area<-(coef_cd_area*(log10(all_days$Area))) + cd_intercept + (coef_cd_ndvi*0.35)
+# Model coefficients predicting cooling distance
+coef_cd_area<-coef(lm_cd_re)[[1]][1,2]
+coef_cd_ndvi<-coef(lm_cd_re)[[1]][1,3]
+coef_cd_ndvi2<-coef(lm_cd_re)[[1]][1,4]
+cd_intercept<-coef(lm_cd_re)[[1]][1,1]
+
+# Model coefficients predicting temperature difference
+coef_td_area<-coef(lm_td_re)[[1]][1,2]
+coef_td_area2<-coef(lm_td_re)[[1]][1,3]
+coef_td_ndvi<-coef(lm_td_re)[[1]][1,4]
+coef_td_ndvi2<-coef(lm_td_re)[[1]][1,5]
+td_intercept<-coef(lm_td_re)[[1]][1,1]
+
+
+# Generating line predicting cooling distance by area
+line_dist_area<- (coef_cd_area*(log10(step_1_results_long_dist$park_area))) + (coef_cd_ndvi*0.4)+ (coef_cd_ndvi2*((0.4)^2)) + cd_intercept
+line_dist_area<-10^line_dist_area
+line_dist_area<-line_dist_area-1
+
+# Generating line predicting cooling distance by NDVI
+line_dist_ndvi<- (coef_cd_area*(log10(4000))) + (coef_cd_ndvi*step_1_results_long_dist$NDVI)+ (coef_cd_ndvi2*((step_1_results_long_dist$NDVI)^2)) + cd_intercept
+line_dist_ndvi<-10^line_dist_ndvi
+line_dist_ndvi<-line_dist_ndvi-1
+
+# Generating line predicting temperature difference by area
+line_temp_area<-(coef_td_area*(log10(step_1_results_long_dist$park_area))) + (coef_td_area2*((log10(step_1_results_long_dist$park_area))^2)) + (coef_td_ndvi*0.4)+ (coef_td_ndvi2*((0.4)^2)) + td_intercept
+
+# Generating line predicting temperature difference by NDVI
+line_temp_ndvi<-(coef_td_area*(log10(4000))) + (coef_td_area2*((log10(4000))^2)) + (coef_td_ndvi*step_1_results_long_dist$NDVI)+ (coef_td_ndvi2*((step_1_results_long_dist$NDVI)^2)) + td_intercept
+
+## Add lines to plots
+p_all_dist_by_area_line<-p_all_dist_by_area+
+  geom_line(aes(x = step_1_results_long_dist$park_area, y =line_dist_area), inherit.aes = FALSE)
+
+p_all_dist_by_ndvi_line<-p_all_dist_by_NDVI+
+  geom_line(aes(x = step_1_results_long_dist$NDVI, y =line_dist_ndvi), inherit.aes = FALSE)
+
+p_all_temp_by_area_line<-p_all_temp_by_area+
+  geom_line(aes(x = step_1_results_long_dist$park_area, y =line_temp_area), inherit.aes = FALSE)
+
+p_all_temp_by_ndvi_line<-p_all_temp_by_NDVI +
+  geom_line(aes(x = step_1_results_long_dist$NDVI, y =line_temp_ndvi), inherit.aes = FALSE)
+
+## Align plots
+aligned <- align_plots( p_all_dist_by_area_line, p_all_dist_by_ndvi_line, p_all_temp_by_area_line, p_all_temp_by_ndvi_line ,align = "hv")
+
+## Draw plots
+plot_grid(ggdraw(aligned[[1]]) , ggdraw(aligned[[2]]), ggdraw(aligned[[3]]), ggdraw(aligned[[4]])  )
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("temp_diff_dist_all_days.png",
+       dpi = 600, height = 6, 
+       width = 9)
+
+rm(aligned, p_all_dist_by_area, p_all_dist_by_area_line, p_all_dist_by_NDVI, p_all_dist_by_ndvi_line, p_all_temp_by_area, p_all_temp_by_area_line, p_all_temp_by_NDVI, p_all_temp_by_ndvi_line, line_dist_area, line_dist_ndvi, line_temp_area, line_temp_ndvi, lm_cd_re, lm_td_re)
+
+###Plot histogram
+## Distance
+brks<-c(seq(0, max(pretty(step_1_results_long_dist$Max_dist)), 100))
+
+h_191<-hist(step_1_results$Max_dist_191,
+        breaks = brks, right = FALSE, plot = FALSE)
+h_191<-data.frame("Counts" =h_191$counts, "Lowest_val"=h_191$breaks[1:12], "Day"=rep(191, 12))
+h_203<-hist(step_1_results$Max_dist_203,
+        breaks = brks, right = FALSE, plot = FALSE)
+h_203<-data.frame("Counts" =h_203$counts, "Lowest_val"=h_203$breaks[1:12], "Day"=rep(203, 12))
+h_205<-hist(step_1_results$Max_dist_205,
+        breaks = brks, right = FALSE, plot = FALSE)
+h_205<-data.frame("Counts" =h_205$counts, "Lowest_val"=h_205$breaks[1:12], "Day"=rep(205, 12))
+h_dist<-rbind(h_191, h_203, h_205)
+h_dist$Day<-as.character(h_dist$Day)
+
+hist_dist<-ggplot(h_dist, aes(x = Lowest_val, y = Counts, color=Day, fill = Day, group = Day)) +
+  geom_bar(stat = "identity", position = "dodge")+
+  scale_colour_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+   scale_fill_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+  xlab("Max cooling distance (m)")+
+   ylab("Number of green spaces")+
+  theme_minimal()+
+  ylim(c(0, 325))+
+  xlim(c(-50, 1200))
+
+rm( h_191, h_203, h_205, brks,  h_dist)
+
+## Temperature difference histogram
+brks<-c(seq(0, max(pretty(step_1_results_long_temp$temp_diff)), 0.25))
+
+h_191<-hist(step_1_results$temp_diff_191,
+        breaks = brks, right = FALSE, plot = FALSE)
+h_191<-data.frame("Counts" =h_191$counts, "Lowest_val"=h_191$breaks[1:8], "Day"=rep(191, 8))
+h_203<-hist(step_1_results$temp_diff_203,
+        breaks = brks, right = FALSE, plot = FALSE)
+h_203<-data.frame("Counts" =h_203$counts, "Lowest_val"=h_203$breaks[1:8], "Day"=rep(203, 8))
+h_205<-hist(step_1_results$temp_diff_205,
+        breaks = brks, right = FALSE, plot = FALSE)
+h_205<-data.frame("Counts" =h_205$counts, "Lowest_val"=h_205$breaks[1:8], "Day"=rep(205, 8))
+h_temp<-rbind(h_191, h_203, h_205)
+h_temp$Day<-as.character(h_temp$Day)
+
+hist_temp<-ggplot(h_temp, aes(x = Lowest_val, y = Counts, color=Day, fill = Day, group = Day)) +
+  geom_bar(stat = "identity", position = "dodge")+
+  scale_colour_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+   scale_fill_manual(values = rev(color_pal[c(2,4,5)]), labels = c("10th July", "22nd July", "24th July"))+
+  xlab("Temperature difference (°C)")+
+     ylab("Number of green spaces")+
+  theme_minimal()+
+  ylim(c(0, 350))
+
+plot_grid(hist_dist, hist_temp)
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("temp_diff_dist_counts_all_days.png",
+       dpi = 600, height = 3, 
+       width = 9)
+
+rm(brks, h_191, h_205,h_203, h_temp,  hist_dist, hist_temp, step_1_results_long_dist, step_1_results_long_temp, step_1_results)
+```
+
+
+## Present indicative values for cooling by area and NDVI
+```{r cooling_indicative_values, echo = FALSE}
+area<-c(1000, 10000, 100000)
+
+dist_by_area<- (coef_cd_area*(log10(area))) + (coef_cd_ndvi*0.4)+ (coef_cd_ndvi2*((0.4)^2)) + cd_intercept
+dist_by_area<-10^dist_by_area
+dist_by_area<-dist_by_area-1
+
+dist_by_area
+NDVI<-c(0.2, 0.4, 0.5, 0.6)
+dist_by_ndvi<- (coef_cd_area*(log10(4000))) + (coef_cd_ndvi*NDVI)+ (coef_cd_ndvi2*((NDVI)^2)) + cd_intercept
+
+dist_by_ndvi<-10^dist_by_ndvi
+dist_by_ndvi<-dist_by_ndvi-1
+temp_by_area<-(coef_td_area*(log10(area))) + (coef_td_area2*((log10(area))^2)) + (coef_td_ndvi*0.4)+ (coef_td_ndvi2*((0.4)^2)) + td_intercept
+temp_by_area
+
+temp_by_ndvi<-(coef_td_area*(log10(4000))) + (coef_td_area2*((log10(4000))^2)) + (coef_td_ndvi*NDVI)+ (coef_td_ndvi2*((NDVI)^2)) + td_intercept
+df_area<-data.frame(area,dist_by_area, temp_by_area )
+df_area<-as_huxtable(df_area)
+number_format(df_area)<-3
+df_area
+
+df_ndvi<-data.frame(NDVI,dist_by_ndvi, temp_by_ndvi) %>%
+  as_huxtable()
+number_format(df_ndvi)<-3
+df_ndvi
+rm(area, dist_by_area, NDVI, dist_by_ndvi, df_area, df_ndvi, temp_by_ndvi, temp_by_area)
+
+```
+
+## Step 2 - upscale to all greenspaces
+### Read in parks data
+
+```{r read_parks, echo = FALSE}
+
+## Set working directory
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+
+## Load in parks data using terra package
+Parks_master<-vect("greenspaces_central.shp")
+
+## set coordinate reference system
+crs(Parks_master)<-"EPSG:2154"
+
+## Calculate the area of each green space
+Parks_master$area_calc<-expanse(Parks_master)
+
+brks<-c(0, 1, 10,50, 100, 1000,5000, 10000, 100000, 1000000,
+        max(Parks_master$area_calc, na.rm = TRUE))
+labels<-c("0 - <1", "1 - <10", "10 - <50","50 - <100", 
+          "100 - <1,000", "1,000 - <5,000",
+          "5,000 - <10,000",
+          "10,000 - <100,000","100,000 - <1,000,000",
+          ">=1,000,000")
+
+## Label each green space with a category based on area
+Parks_master$area_cat<-cut(Parks_master$area_calc,
+                           breaks=brks,
+                   labels = labels,
+                           right = FALSE,
+                           include.lowest =TRUE)
+
+rm(brks, labels)
+
+ind<-which(Parks_master$area_calc>1000)
+## Retain only green spaces which are at least 1000m2
+Parks_grtr_1000<-Parks_master[ind,]
+rm(Parks_master,ind)
+
+## Create a rectangle with which to crop the temperature rasters. 
+## This is created from a bounding box of the green spaces plus a buffer of 1000 m
+parks_bounding<-ext(Parks_grtr_1000) %>%
+  as.polygons() %>%
+  buffer(width = 1000)
+```
+
+### Read NDVI
+
+```{r read_NDVI, echo = FALSE}
+
+## Read in NDVI and attach to parks data
+NDVI<-rast("2019191_interpolated_NDVI.tif") %>%
+  terra::project( "EPSG:2154") %>%
+  crop( parks_bounding) %>%
+  disagg(fact= 6) %>%
+  ## Replace values that are greater than 0.75 with NA
+  {.[. > 0.75] <- NA; .}
+rm( parks_bounding)
+
+# Calculate mean NDVI value for each green space
+NDVI_mean <- terra::extract(NDVI,
+                            Parks_grtr_1000, fun = function(x) mean(x, na.rm = TRUE), ID = FALSE)
+Parks_grtr_1000$NDVI<-NDVI_mean[,1]
+rm(NDVI, NDVI_mean)
+```
+
+###  Calculate maximum cooling distance for all green spaces >1,000m2
+```{r calc_max_cooling_dist}
+
+# Calculate maximum cooling distance using the model coefficients, and the greenspace area and NDVI value
+line_dist_area<- (coef_cd_area*(log10(Parks_grtr_1000$area_calc))) + (coef_cd_ndvi*Parks_grtr_1000$NDVI)+ (coef_cd_ndvi2*((Parks_grtr_1000$NDVI)^2)) + cd_intercept
+line_dist_area<-10^line_dist_area
+line_dist_area<-line_dist_area-1
+
+Parks_grtr_1000$pred_cooling_dist<-line_dist_area
+rm(line_dist_area)
+
+# Calculate maximum cooling distance using the model coefficients, and the greenspace area and NDVI value
+line_temp<-(coef_td_area*(log10(Parks_grtr_1000$area_calc))) + (coef_td_area2*((log10(Parks_grtr_1000$area_calc))^2)) + (coef_td_ndvi*Parks_grtr_1000$NDVI)+ (coef_td_ndvi2*((Parks_grtr_1000$NDVI)^2)) + td_intercept
+Parks_grtr_1000$pred_temp_diff<-line_temp
+rm(line_temp)
+
+print("Median predicted cooling distance for all green spaces")
+median(Parks_grtr_1000$pred_cooling_dist)
+
+print("Maximum predicted cooling distance for all green spaces")
+max(Parks_grtr_1000$pred_cooling_dist)
+
+print("Median predicted temperature difference for all green spaces")
+median(Parks_grtr_1000$pred_temp_diff)
+
+print("Maximum predicted temperature difference for all green spaces")
+max(Parks_grtr_1000$pred_temp_diff)
+
+```
+
+
+### Present histogram of predicted values
+```{r hist_preds, echo = FALSE}
+bins_dist<-c(-1,20, 50, 100, 200, 400, 600, 1550)
+h<-hist(Parks_grtr_1000$pred_cooling_dist, breaks = bins_dist, right = FALSE, plot = FALSE)
+
+bin_labels<-character(length = length(bins_dist)-1)
+#[a, b): Includes a but not b.
+for (i in 1:(length(bins_dist)-1)){
+  bin_labels[i]<-paste0(bins_dist[i], " - <", bins_dist[i+1])
+}
+rm(i)
+
+h_df<-data.frame(bin_labels, "Counts"=h$counts)
+h_df$bin_labels<-factor(h_df$bin_labels, levels =unique(h_df$bin_labels))
+
+p1<-ggplot(h_df, aes(x = bin_labels, y =Counts ))+
+  geom_col()+
+  theme_minimal()+
+  xlab("Maxmium cooling distance (m)")+
+  ylab("Count")+
+  theme(text = element_text(size = 17), axis.text.x = element_text(angle = 30, vjust = 1, hjust=0.5))+
+  ggtitle("a)")
+
+bins_dist<-c(0,0.1, 0.2,0.3, 0.4, 0.5, 1, 2.7)
+h<-hist(Parks_grtr_1000$pred_temp_diff, breaks = bins_dist, right = FALSE, plot = FALSE)
+
+bin_labels<-character(length = length(bins_dist)-1)
+#[a, b): Includes a but not b.
+for (i in 1:(length(bins_dist)-1)){
+  bin_labels[i]<-paste0(bins_dist[i], " - <", bins_dist[i+1])
+}
+rm(i)
+
+h_df<-data.frame(bin_labels, "Counts"=h$counts)
+h_df$bin_labels<-factor(h_df$bin_labels, levels =unique(h_df$bin_labels))
+
+p2<-ggplot(h_df, aes(x = bin_labels, y =Counts ))+
+  geom_col()+
+  theme_minimal()+
+  xlab("Temperature difference (°C)")+
+  ylab("Count")+
+  theme(text = element_text(size = 17),
+        axis.text.x = element_text(angle = 30, vjust = 1, hjust=0.5))+
+  ggtitle("b)")
+
+aligned <- align_plots( p1, p2,align = "hv")
+
+plot_grid(ggdraw(aligned[[1]]) , ggdraw(aligned[[2]]) )
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("pred_cooling_effects_hist.png",
+       dpi = 600, height = 4.75, 
+       width = 10.5)
+
+rm(aligned, p1, p2, h_df, bin_labels, bins_dist, h)
+```
+
+### Descriptives of predictions
+```{r descriptive_predictions, echo = FALSE}
+
+#names(Parks_grtr_1000)
+Parks_grtr_1000_df<-as.data.frame(Parks_grtr_1000)
+
+summary_pred<-Parks_grtr_1000_df %>%
+  dplyr::group_by(area_cat) %>% 
+  dplyr::summarise(Median_cd = median(pred_cooling_dist, na.rm = TRUE), Max_cd = max(pred_cooling_dist, na.rm = TRUE),Median_td = median(pred_temp_diff, na.rm = TRUE), Max_td = max(pred_temp_diff, na.rm = TRUE), Count = n()) %>%
+  as_huxtable()
+
+number_format(summary_pred)<-3
+summary_pred
+rm(Parks_grtr_1000_df, summary_pred)
+
+```
+
+## Calculate population benefitting
+
+### Read in population data
+```{r population_data, echo = FALSE}
+## Population data
+
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+
+Pop<-vect("densibati_central_ile_de_france.shp") %>%
+  makeValid()
+
+total_pop<-sum(Pop$POPMEN2016,na.rm = TRUE)
+
+```
+
+```{r parks_max_cd_buff, echo = FALSE}
+
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+writeVector(Parks_grtr_1000, "Parks_grtr_1000_with_preds.shp")
+#Parks_grtr_1000<-vect("Parks_grtr_1000_with_preds.shp")
+
+## Calculate buffers for all green spaces for a width of the maximum cooling distance
+Parks_grtr_1000_with_cd_buffs<-terra::buffer(Parks_grtr_1000, width=Parks_grtr_1000$pred_cooling_dist) %>%
+  terra::aggregate() 
+
+writeVector(Parks_grtr_1000_with_cd_buffs,"Parks_grtr_1000_with_cd_buffs.shp" , overwrite = TRUE)
+
+# retain only buildings which intersect with the cooling areas
+is_related_pop<-is.related(Pop, Parks_grtr_1000_with_cd_buffs, relation="intersects")
+
+ind<-which(is_related_pop==TRUE)
+
+Pop_related<-Pop[ind,]
+rm(ind)
+
+## Calculate the building area
+Pop_related$OG_area<-expanse(Pop_related)
+# Intersect the buildings with the cooling areas
+Pop_inter<-terra::intersect(Pop_related,Parks_grtr_1000_with_cd_buffs)
+# Calculate the area of intersected building area
+Pop_inter$Inter_area<-expanse(Pop_inter)
+# Calculate the percentage of the intersected area of the original building area
+Pop_inter$Area_prc<-Pop_inter$Inter_area/Pop_inter$OG_area
+ind<-which(Pop_inter$Area_prc>1)
+Pop_inter$Area_prc[ind]<-1
+# Calculate the population in the intersected area as a proportion of the original building population by the proportion of the intersected area
+Pop_inter$Pop_recalc<-Pop_inter$POPMEN2016*Pop_inter$Area_prc
+# Calculate the number of people living within cooling areas
+MCD_pop<-sum(Pop_inter$Pop_recalc, na.rm = TRUE)
+
+print("Total population benefiting from cooling")
+MCD_pop
+print("Percentage benefiting from cooling")
+MCD_pop/total_pop*100
+
+rm(Pop_inter, Pop_related, is_related_pop, MCD_pop, total_pop)
+```
+
+```{r plotting_pop_MCD, echo = FALSE}
+
+
+p<-ggplot()+
+   geom_spatvector(data = Pop,  aes(fill = "gray90", colour = "gray90"))+
+ geom_spatvector(data = Parks_grtr_1000_with_cd_buffs, aes(colour="gray34",fill = "gray80"))+
+     geom_spatvector(data = Parks_grtr_1000, aes(colour="gray34",fill = "darkseagreen"))+
+    scale_fill_identity(name = NULL,guide = 'legend',labels = c("Public green spaces", "Maximum cooling distance", "Buildings")) +
+  theme_minimal()+
+    scale_colour_manual(values =c("gray90"="gray90","gray34"="gray34",  "darkseagreen"= "darkseagreen"),guide = 'none', labels = c("Public green spaces", "Maximum cooling distance", "Buildings"))
+p
+
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("map_greenspaces_mcd.png", dpi = 600, width = 6, height = 5)
+
+```
+
