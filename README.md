@@ -18,6 +18,8 @@ Code is currently not reproducible as the data is not included
 `step_1_subset.rmd` 
 - Subsets green spaces to those >1,000m2
 - Read in temperature rasters for three hot days and resample to every 5 m
-- Read in NDVI data and calculate mean value for each greenspace
-- Find the distance to either the nearest other green space or water body, whichever is closest
+- Read in NDVI data, resample to every 5 m and calculate mean value for each greenspace
+- Selects greenspaces which are at least 150 m from other green spaces or water bodies (distances calculated using NNJoin in QGIS). 
+- Finds maximum cooling distance and temperature difference between the greenspace boundary and maximum cooling distance for all green spaces in this subset
+- Saves results
 
