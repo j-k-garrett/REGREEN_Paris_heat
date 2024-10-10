@@ -85,6 +85,10 @@ parks_bounding<-ext(Parks_grtr_1000) %>%
 ## 2. Read in temperature data for three days - 10th, 22nd, 24th July 2019
 
 ```{r read_temp_data, echo =FALSE}
+
+## Set working directory
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+
 ## Read in data
 temp_proj_191<-rast("Temp_data\\2019191_TAVG.tif") %>%
   ## project to the same coordinate reference system as the green spaces
@@ -108,7 +112,8 @@ temp_proj_205<-rast("Temp_data\\2019205_TAVG.tif") %>%
 ## 3. Read in NDVI
 
 ```{r read_NDVI, echo = FALSE}
-
+## Set working directory
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
 ## Read in NDVI and attach to parks data
 NDVI<-rast("2019191_interpolated_NDVI.tif") %>%
   terra::project( "EPSG:2154") %>%
@@ -211,7 +216,6 @@ rm(distance_counts)
 
 ## Select green spaces which are at least 150 m from another green space or water body
 ind<-which(Parks_grtr_1000$nearest_di>150 & Parks_grtr_1000$water_dist>150)
-
 Parks_master_150m_dist<-Parks_grtr_1000[ind,]
 
 writeVector(Parks_master_150m_dist, "Parks_master_150m_dist.shp", overwrite = TRUE)
@@ -222,6 +226,8 @@ range(Parks_master_150m_dist$area_terra)
 
 
 ```{r analysis, echo = FALSE}
+
+## Create empty data.frames
 Min_dist<-data.frame(Min_dist_191= numeric(NROW(Parks_master_150m_dist)), Min_dist_203= numeric(NROW(Parks_master_150m_dist)), Min_dist_205= numeric(NROW(Parks_master_150m_dist)))
 
 Max_dist<-data.frame(Max_dist_191= numeric(NROW(Parks_master_150m_dist)), Max_dist_203= numeric(NROW(Parks_master_150m_dist)), Max_dist_205= numeric(NROW(Parks_master_150m_dist)))
@@ -230,6 +236,7 @@ mean_temp_at_peak<-data.frame(Peak_temp_191= numeric(NROW(Parks_master_150m_dist
 
 boundary_temp<-data.frame(boundary_temp_191= numeric(NROW(Parks_master_150m_dist)), boundary_temp_203= numeric(NROW(Parks_master_150m_dist)), boundary_temp_205= numeric(NROW(Parks_master_150m_dist)))
 
+## Set buffer intervals (and create labels) from -15 m fom the greenspace boundary, to 1300 m from the greenspace boundary with intervals of 30 m
 brks<-c(-15, seq(0, 1300, 30))
 labels<-character(length=(length(brks))-1)
 for (i in 1:length(labels)){
@@ -237,60 +244,72 @@ for (i in 1:length(labels)){
 }
 rm( i) 
 
-## up to here 8th April, i = 307, j = 3
-#Wasn;t working, now fixed and re running
+## run analysis on each greenspace in the subset for each temperature day
 for (i in 1:NROW(Parks_master_150m_dist)){
   mean_temp_191<-numeric(length=(length(brks))-1)
   mean_temp_203<-numeric(length=(length(brks))-1)
   mean_temp_205<-numeric(length=(length(brks))-1)
+  ## Run analysis for each 30 m intervals - calculates mean temperature for 30 m buffers around the greenspace
   for (j in 1:44){
+    # Create a buffer at the interval minimum
     Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=brks[j])
+    ## Where -15 m from the boundary has zero area, try -10 m and then -5 m to calculate boundary temperature
     if (j == 1 & expanse(Buff_min) == 0){
-       Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=-10)
+      Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=-10)
     }
-     if (j == 1 & expanse(Buff_min) == 0){
-       Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=-5)
+    if (j == 1 & expanse(Buff_min) == 0){
+      Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=-5)
     }
+    # Create a buffer at the interval minimum
     Buff_max<-terra::buffer(Parks_master_150m_dist[i,], width=brks[j+1])
+    # Cut out the minimum buffer from the maximum to create a ring 
     Buff_ring<-terra::symdif(Buff_max,Buff_min)
+    ## Select only Buffer rings where they are greater than 1 m
     if(NROW(Buff_ring)>1){
       Buff_area<-expanse(Buff_ring)
-      ind<-which(Buff_area<1)
       Buff_ring<-Buff_ring[Buff_area>1]
     }
     rm(Buff_min, Buff_max)
+    ## Calculate mean temperature within the buffer for each of the three hot days
     mean_temp_191[j]<-as.numeric(terra::extract(temp_proj_191, Buff_ring, fun = mean)[2])
     mean_temp_203[j]<-as.numeric(terra::extract(temp_proj_203, Buff_ring, fun = mean)[2])
     mean_temp_205[j]<-as.numeric(terra::extract(temp_proj_205, Buff_ring, fun = mean)[2])
     rm(Buff_ring)
-}
-
-temp_dist<-data.frame(mean_temp_191,mean_temp_203,mean_temp_205,  brks[2:length(brks)], labels)
-names(temp_dist)[1:4]<-c("Temp_191", "Temp_203", "Temp_205", "Distance")
-rm(mean_temp_191, mean_temp_203, mean_temp_205)
- for (k in 1:3){
-  ind<-which(temp_dist[,k]>0)
+  }
+  temp_dist<-data.frame(mean_temp_191,mean_temp_203,mean_temp_205,  brks[2:length(brks)], labels)
+  names(temp_dist)[1:4]<-c("Temp_191", "Temp_203", "Temp_205", "Distance")
+  rm(mean_temp_191, mean_temp_203, mean_temp_205)
+  for (k in 1:3){
+    ind<-which(temp_dist[,k]>0)
+    # Find maximum cooling distance 
+    ## Only for where mean temperature within 0 - 30 m is greater than -15 - 0 m
     if (temp_dist[(min(ind))+1,k]>temp_dist[min(ind),k]){
-    ##second column is the position
+      ## Calculate location of peaks
       pks<-findpeaks(temp_dist[,k])
+      ## Store the minimum and maximum buffer distance of the peak location
       Min_dist[i,k]<-brks[(pks[1,2])]
       Max_dist[i,k]<-brks[(pks[1,2])+1]
+      ## Store the peak temperature
       mean_temp_at_peak[i,k]<-pks[1,1]
       rm(pks)
     } else {
+      ## If temperature 0 - 30 m is not greater than -15- 0 m, store minimum distance as <0, max distance as 0 and store temperature value
       Min_dist[i,k]<-(-5)
       Max_dist[i,k]<-0
       mean_temp_at_peak[i,k]<-temp_dist[1,k]
     }
-    }
-boundary_temp$boundary_temp_191[i]<-temp_dist$Temp_191[1]
-boundary_temp$boundary_temp_203[i]<-temp_dist$Temp_203[ 1]
-boundary_temp$boundary_temp_205[i]<-temp_dist$Temp_205[1]
- # print(i)
+  }
+  ## Store boundary temperatures
+  boundary_temp$boundary_temp_191[i]<-temp_dist$Temp_191[1]
+  boundary_temp$boundary_temp_203[i]<-temp_dist$Temp_203[ 1]
+  boundary_temp$boundary_temp_205[i]<-temp_dist$Temp_205[1]
+  # print(i)
   rm(temp_dist)
 }
 
 rm(i,j,k, ind, brks, labels)
+
+## Calculate temperature differences between the peak temperature and the boundary temperature
 temp_diff_191<-mean_temp_at_peak$Peak_temp_191-boundary_temp$boundary_temp_191
 temp_diff_203<-mean_temp_at_peak$Peak_temp_203-boundary_temp$boundary_temp_203
 temp_diff_205<-mean_temp_at_peak$Peak_temp_205-boundary_temp$boundary_temp_205
@@ -299,8 +318,10 @@ temp_diff<-data.frame(temp_diff_191, temp_diff_203, temp_diff_205)
 
 rm(temp_diff_191, temp_diff_203, temp_diff_205)
 
+
 step_1_results<-data.frame(boundary_temp, mean_temp_at_peak, temp_diff, "park_area"=Parks_master_150m_dist$area_terra, Min_dist, Max_dist, "NDVI"=Parks_master_150m_dist$NDVI)
 
+## Save results
 write.csv(step_1_results, "step_1_resuts_575_150m_15042024.csv")
 rm( boundary_temp, mean_temp_at_peak, temp_diff, Min_dist, Max_dist)
 
