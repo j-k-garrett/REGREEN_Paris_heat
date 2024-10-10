@@ -203,12 +203,13 @@ rm(p)
 rm(distance_counts)
 ```
 
-## up to here, checking comments
+
 ## Creating green spaces analysis dataset
 >1000 sq m and >150 m distance from a green space or water body
 
 ```{r analysis_data, echo = FALSE}
 
+## Select green spaces which are at least 150 m from another green space or water body
 ind<-which(Parks_grtr_1000$nearest_di>150 & Parks_grtr_1000$water_dist>150)
 
 Parks_master_150m_dist<-Parks_grtr_1000[ind,]
