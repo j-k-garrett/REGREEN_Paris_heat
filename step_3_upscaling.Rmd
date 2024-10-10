@@ -1,0 +1,586 @@
+---
+title: "step_3_upscaling"
+author: "Jo Garrett"
+date: '2024-04-23'
+output: word_document
+---
+```{r libraries,echo = FALSE}
+library(terra)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(flextable)
+library(zoo)
+library(readr)
+library(tidyterra)
+library(RColorBrewer)
+```
+
+## Read in data
+
+```{r read_parks, echo = FALSE}
+
+## Set working directory
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+
+## Load in parks data using terra package
+Parks_grtr_1000<-vect("Parks_grtr_1000_with_preds.shp")
+
+parks_bounding<-ext(Parks_grtr_1000) %>%
+  as.polygons() %>%
+  buffer(width = 1000)
+```
+
+
+
+```{r read_temp_data, echo =FALSE}
+
+
+## Set working directory
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+## Read in data
+temp_proj_191<-rast("Temp_data\\2019191_TAVG.tif") %>%
+  ## project to the same coordinate reference system as the green spaces
+  terra::project( "EPSG:2154") %>%
+## Crop to the bounding box 
+  crop( parks_bounding) %>%
+## Resample by a factor of 6 (to every 5 m)
+  disagg( fact= 6)
+
+temp_proj_203<-rast("Temp_data\\2019203_TAVG.tif") %>%
+  terra::project( "EPSG:2154") %>%
+  crop( parks_bounding) %>%
+  disagg( fact= 6)
+
+temp_proj_205<-rast("Temp_data\\2019205_TAVG.tif") %>%
+  terra::project( "EPSG:2154") %>%
+  crop( parks_bounding) %>%
+  disagg( fact= 6)
+
+rm(parks_bounding)
+```
+
+## Calculate the boundary temperatures for all green spaces in Paris for the three hot days
+
+```{r boundary_temp_cals, echo = FALSE}
+
+# Create empty data frame
+boundary_temp<-data.frame(boundary_temp_191= numeric(NROW(Parks_grtr_1000)), boundary_temp_203= numeric(NROW(Parks_grtr_1000)), boundary_temp_205= numeric(NROW(Parks_grtr_1000)))
+
+# Run processing for all green spaces at least 1,000m2
+for (i in 1:NROW(Parks_grtr_1000)){
+  # Calculate greenspace buffer 15 m inside the boundary
+    Buff_min<-terra::buffer(Parks_grtr_1000[i,], width=-15)
+    # Where the area of the above is 0, try with 10 m inside boundary
+    if (expanse(Buff_min) == 0){
+       Buff_min<-terra::buffer(Parks_grtr_1000[i,], width=-10)
+    }
+    # Where the area of the above is 0, try with 5 m inside boundary
+     if (expanse(Buff_min) == 0){
+       Buff_min<-terra::buffer(Parks_grtr_1000[i,], width=-5)
+     }
+    # calculate buffer ring
+    Buff_ring<-terra::symdif(Parks_grtr_1000[i,],Buff_min)
+    # Include buffer rings only where they have value of 1m2 or more
+   if(NROW(Buff_ring)>1){
+      Buff_area<-expanse(Buff_ring)
+      Buff_ring<-Buff_ring[Buff_area>1]
+      rm(Buff_area)
+   }
+    rm(Buff_min)
+    # Calculate mean temperature withint he buffer for each of the three hot days
+      boundary_temp$boundary_temp_191[i]<-as.numeric(terra::extract(temp_proj_191, Buff_ring, fun = mean)[2])
+    boundary_temp$boundary_temp_203[i]<-as.numeric(terra::extract(temp_proj_203, Buff_ring, fun = mean)[2])
+    boundary_temp$boundary_temp_205[i]<-as.numeric(terra::extract(temp_proj_205, Buff_ring, fun = mean)[2])
+    rm(Buff_ring)
+}
+
+Parks_grtr_1000$bt_191<-boundary_temp$boundary_temp_191
+
+Parks_grtr_1000$bt_203<-boundary_temp$boundary_temp_203
+Parks_grtr_1000$bt_205<-boundary_temp$boundary_temp_205
+
+rm(boundary_temp)
+```
+
+### Plot the boundary temperatures
+
+```{r plot_temps_by_park, echo = FALSE}
+
+# Prepare plot for each of the three hot days
+brks<-seq(16, 29, 0.5)
+h<-hist(Parks_grtr_1000$bt_191, right = FALSE, breaks = brks)
+h_df<-data.frame("Mids"=h$mids,"Counts"=h$counts) %>%
+  mutate("Percent"=Counts/sum(Counts)*100)
+p1<-ggplot(data = h_df, aes(x = Mids, y = Percent))+
+  geom_col()+
+  theme_minimal() +
+  xlab("Greenspace boundary temperature (°C)")+
+  ylab("%age of green spaces")+
+  ggtitle("10th July")+
+  scale_x_continuous(breaks = seq(16, 28.5, 1), limits =c(min(brks), max(brks)+0.5)) +
+  ylim(c(0, 25))
+
+h<-hist(Parks_grtr_1000$bt_203, right = FALSE, breaks = brks)
+h_df<-data.frame("Mids"=h$mids,"Counts"=h$counts) %>%
+  mutate("Percent"=Counts/sum(Counts)*100)
+p2<-ggplot(data = h_df, aes(x = Mids, y = Percent))+
+  geom_col()+
+  theme_minimal() +
+  xlab("Greenspace boundary temperature (°C)")+
+  ylab("%age of green spaces")+
+  ggtitle("22nd July")+
+  scale_x_continuous(breaks = seq(16, 28.5, 1), limits =c(min(brks), max(brks)+0.5))+
+  ylim(c(0, 25))
+
+h<-hist(Parks_grtr_1000$bt_205, right = FALSE, breaks = brks)
+h_df<-data.frame("Mids"=h$mids,"Counts"=h$counts) %>%
+  mutate("Percent"=Counts/sum(Counts)*100)
+p3<-ggplot(data = h_df, aes(x = Mids, y = Percent))+
+  geom_col()+
+  theme_minimal() +
+  xlab("Greenspace boundary temperature (°C)")+
+  ylab("%age of green spaces")+
+  ggtitle("24th July")+
+    scale_x_continuous(breaks = seq(16, 28.5, 1), limits =c(min(brks), max(brks)+0.5))+
+  ylim(c(0, 25))
+
+plot_grid(p1, p2, p3, nrow = 2, ncol = 2, align = "hv")
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("temps_boundaries_three_days.png", dpi = 300, width = 7, height = 4)
+
+rm(p1, p2, p3, h, h_df, brks)
+
+## Present boundary temperature descriptive statistics
+boundary_temp_191<-data.frame("Temp"=Parks_grtr_1000$bt_191, 
+                              "Day" = 191)
+boundary_temp_203<-data.frame("Temp"=Parks_grtr_1000$bt_203, 
+                              "Day" = 203)
+boundary_temp_205<-data.frame("Temp"=Parks_grtr_1000$bt_205, 
+                              "Day" = 205)
+boundary_temps_3_days<-rbind(boundary_temp_191, boundary_temp_203, boundary_temp_205)
+rm(boundary_temp_191, boundary_temp_203, boundary_temp_205)
+
+boundary_stats<-boundary_temps_3_days %>%
+  group_by(Day) %>%
+  summarise('Mean' = mean(Temp), 'Median' = median(Temp),'Min'=min(Temp), 'Max'= max(Temp)) %>% 
+  flextable() %>%
+  colformat_double( digits = 2)
+
+  boundary_stats
+  rm(boundary_stats)
+```
+
+
+### Read in population data
+
+```{r population_data, echo = FALSE}
+## Population data
+
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+
+Pop<-vect("densibati_central_ile_de_france.shp") %>%
+  makeValid()
+
+
+```
+
+### Read in relative risk of mortality 
+```{r read_Rr, echo =FALSE}
+## Read in the relative risks predicting mortality by 1 degree C
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+RRs_by_temp<-read.csv("RR_interped_18102021.csv")
+RRs_by_temp$X<-NULL
+
+# Plot relative risks
+p<-ggplot(RRs_by_temp, aes(x = Temperature, y = RR))+
+  geom_point(size = 0.9)+
+  theme_minimal()+
+  ylim(c(0.99, max(pretty(RRs_by_temp$RR))))+
+  geom_vline(xintercept = 21.6, linetype = "dashed", color = "red") +
+  ylab("Relative risk of mortality")+
+  xlab("Temperature (°C)")
+
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("RR_mortality_by_temp.png", dpi = 300, height = 3, width = 3.5)
+rm(p)
+
+## Mortality rate Paris
+mortality_rate_2019_paris<-6.065503/365
+# Value of a statistical life
+
+VSL = 4680000
+```
+
+## Calculate lives saved and associated economic value for the three hot days
+```{r, calc_lives_saved,echo =FALSE}
+
+Parks_grtr_1000$ls_191<-NA
+Parks_grtr_1000$ls_203<-NA
+Parks_grtr_1000$ls_205<-NA
+
+ind<-which(names(Parks_grtr_1000)=="pred_cooli")
+names(Parks_grtr_1000)[ind]<-"pred_cooling"
+rm(ind)
+
+Pop$area_calc<-terra::expanse(Pop)
+
+# truncate cooling at 0
+ind<-which(Parks_grtr_1000$pred_cooling<0)
+Parks_grtr_1000$pred_cooling[ind]<-0
+rm(ind)
+
+# 
+for (i in 1:NROW(Parks_grtr_1000)){
+  if (Parks_grtr_1000$pred_cooling[i]>=15){
+
+  # create a sequence of values to the maximum cooling distance
+  Buff_vals<-seq(0, Parks_grtr_1000$pred_cooling[i], 30)
+  # Add an extra interval if the maximum cooling distance is more than 15 m greater than maximum interval value
+  if (Parks_grtr_1000$pred_cooling[i]>(max(Buff_vals)+15)){
+    Buff_vals<-c(Buff_vals, max(Buff_vals)+30)
+  }
+    
+  ## convert to two sequences for minimum and maximum value
+  Buff_min_vals<-Buff_vals[1:(length(Buff_vals)-1)]
+  Buff_max_vals<-Buff_vals[2:length(Buff_vals)]
+    # find the temperature at the maximum cooling distance for day 191
+  temp_at_max_dist_191<-Parks_grtr_1000$bt_191[i]+Parks_grtr_1000$pred_temp_[i]
+  # calculate a sequence of temperature values from the boundary temperature to the temp at the cooling distance at the locations of the intervals (0, 30 m etc)
+  temps_191<-seq(  Parks_grtr_1000$bt_191[i],   temp_at_max_dist_191, length.out = length(Buff_vals))
+  # Calculate the mean values of the temperatures at the intervals such that they'e assocaited with the distances 15 m, 45 m etc
+  temps_191<-rollapply(temps_191, 2, mean, by = 1, align = "left", partial = TRUE, fill = NA)[1:length(Buff_min_vals)]
+  temp_at_max_dist_203<-Parks_grtr_1000$bt_203[i]+Parks_grtr_1000$pred_temp_[i]
+  temps_203<-seq(  Parks_grtr_1000$bt_203[i],   temp_at_max_dist_203, length.out = length(Buff_vals))
+  temps_203<-rollapply(temps_203, 2, mean, by = 1, align = "left", partial = TRUE, fill = NA)[1:length(Buff_min_vals)]
+  temp_at_max_dist_205<-Parks_grtr_1000$bt_205[i]+Parks_grtr_1000$pred_temp_[i]
+  temps_205<-seq(  Parks_grtr_1000$bt_205[i],   temp_at_max_dist_205, length.out = length(Buff_vals))
+  temps_205<-rollapply(temps_205, 2, mean, by = 1, align = "left", partial = TRUE, fill = NA)[1:length(Buff_min_vals)]
+  rm(Buff_vals)
+  # Create empty variables
+  lives_saved_191<-numeric(length(Buff_min_vals))
+  lives_saved_203<-numeric(length(Buff_min_vals))
+  lives_saved_205<-numeric(length(Buff_min_vals))
+  
+  for (j in 1:length(Buff_min_vals)){
+    # Calculate the number of people living within each buffer
+    Buff_min<-terra::buffer(Parks_grtr_1000[i,], width=Buff_min_vals[j])
+    Buff_max<-terra::buffer(Parks_grtr_1000[i,], width=Buff_max_vals[j])
+  Buff_ring<-terra::symdif(Buff_max,Buff_min)
+    rm(Buff_max, Buff_min)
+    Pop_inter<-terra::intersect(Pop,Buff_ring)
+    Pop_inter$NewArea<-terra::expanse(Pop_inter)
+    Pop_inter$New_Pop<-as.numeric(Pop_inter$POPMEN2016*(Pop_inter$NewArea/Pop_inter$area_calc))
+      Buff_pop<-sum(Pop_inter$New_Pop)
+      # Find the relative risk associated with the temperature they're exposed to for each of the three hot days
+      ind_191<-which.min(abs(RRs_by_temp$Temperature - temps_191[j]))
+      # calculate the expected deaths 
+      deaths_at_temp_191<- ((mortality_rate_2019_paris*RRs_by_temp$RR[  ind_191])/1000)*Buff_pop
+      ind_203<-which.min(abs(RRs_by_temp$Temperature - temps_203[j]))
+      deaths_at_temp_203<- ((mortality_rate_2019_paris*RRs_by_temp$RR[  ind_203])/1000)*Buff_pop
+      ind_205<-which.min(abs(RRs_by_temp$Temperature - temps_205[j]))
+      deaths_at_temp_205<- ((mortality_rate_2019_paris*RRs_by_temp$RR[  ind_205])/1000)*Buff_pop
+      rm(ind_191,ind_203, ind_205)
+      # find the relative risk of mortality at the peak temperatures (therefore assuming no cooling)
+      ind_pk_191<-which.min(abs(RRs_by_temp$Temperature - (Parks_grtr_1000$bt_191[i]+Parks_grtr_1000$pred_temp_[i])))
+      ind_pk_203<-which.min(abs(RRs_by_temp$Temperature - (Parks_grtr_1000$bt_203[i]+Parks_grtr_1000$pred_temp_[i])))
+  
+      ind_pk_205<-which.min(abs(RRs_by_temp$Temperature - (Parks_grtr_1000$bt_205[i]+Parks_grtr_1000$pred_temp_[i])))
+      # Calculate the expected deaths at thepeak temperatures for each of the three hot days
+      deaths_at_pk_temp_191<- ((mortality_rate_2019_paris*RRs_by_temp$RR[ind_pk_191])/1000)*Buff_pop
+      deaths_at_pk_temp_203<- ((mortality_rate_2019_paris*RRs_by_temp$RR[ind_pk_203])/1000)*Buff_pop
+      deaths_at_pk_temp_205<- ((mortality_rate_2019_paris*RRs_by_temp$RR[ind_pk_205])/1000)*Buff_pop
+      # Calculate the deaths prevented by subtracting the deaths at cooled temperatures from the expected deaths at peak temperature
+      lives_saved_191[j]<-deaths_at_pk_temp_191- deaths_at_temp_191
+      lives_saved_203[j]<-deaths_at_pk_temp_203- deaths_at_temp_203
+      lives_saved_205[j]<-deaths_at_pk_temp_205- deaths_at_temp_205
+    print(j)
+  }
+  # Calculate the total of lives saved for each greenspace for each of the three hot days
+    Parks_grtr_1000$ls_191[i]<-sum(lives_saved_191)
+    Parks_grtr_1000$ls_203[i]<-sum(lives_saved_203)
+    Parks_grtr_1000$ls_205[i]<-sum(lives_saved_205)
+
+    rm(lives_saved_191, lives_saved_203, lives_saved_205)
+    print(i)
+  } else{
+    Parks_grtr_1000$ls_191[i]<-0
+    Parks_grtr_1000$ls_203[i]<-0
+    Parks_grtr_1000$ls_205[i]<-0
+  }
+}
+
+# Calculate the value by multiplying the number of lives saved by the VSL
+Parks_grtr_1000$v_191<-Parks_grtr_1000$ls_191*VSL
+Parks_grtr_1000$v_203<-Parks_grtr_1000$ls_203*VSL
+Parks_grtr_1000$v_205<-Parks_grtr_1000$ls_205*VSL
+
+rm(i, j, deaths_at_pk_temp_191, deaths_at_pk_temp_203, deaths_at_pk_temp_205, deaths_at_temp_191, deaths_at_temp_203, deaths_at_temp_205, ind_pk_191, ind_pk_203, ind_pk_205, Pop_inter,  temp_at_max_dist_191, temp_at_max_dist_203, temp_at_max_dist_205, temps_191, temps_203, temps_205, Buff_max_vals, Buff_min_vals, Buff_pop, Buff_ring)
+
+```
+
+
+## Finding all days above 21.6
+```{r read_orly_temps, echo = FALSE}
+# Read in temperatures for 2019 as recorded at Paris Orly airport
+orly_temp<-read.csv("Paris_Orly_temp.csv")
+# find where the average temperature was above the minimum mortality threshold
+ind<-which(orly_temp$TAVG>21.6)
+dates_above_mmt<-orly_temp[ind,]
+rm(ind)
+ dates_above_mmt$dates_as_date<- as.Date(dates_above_mmt$DATE,format = "%d/%m/%Y")
+
+ind<-which(dates_above_mmt$Day_no==191 | dates_above_mmt$Day_no==203 | dates_above_mmt$Day_no==205)
+
+## find the nearest day in temperatre compare to the three hot days already analysed
+dates_above_mmt$diff_191<-numeric(NROW(dates_above_mmt))
+dates_above_mmt$diff_203<-numeric(NROW(dates_above_mmt))
+dates_above_mmt$diff_205<-numeric(NROW(dates_above_mmt))
+for (i in 1:NROW(dates_above_mmt)){
+  dates_above_mmt$diff_191[i]<-dates_above_mmt$TAVG[i]-dates_above_mmt$TAVG[ind[1]]
+    dates_above_mmt$diff_203[i]<-dates_above_mmt$TAVG[i]-dates_above_mmt$TAVG[ind[2]]
+    dates_above_mmt$diff_205[i]<-dates_above_mmt$TAVG[i]-dates_above_mmt$TAVG[ind[3]]
+}
+
+dates_above_mmt$min_diff<-character(NROW(dates_above_mmt))
+for (i in 1:NROW(dates_above_mmt)){
+  ind_min<-which.min(abs(dates_above_mmt[i,c(12:14)]))
+  dates_above_mmt$min_diff[i]<-names(ind_min)
+  rm(ind_min)
+}
+
+ind2<-which(dates_above_mmt$Day_no!=191 & dates_above_mmt$Day_no!=203 & dates_above_mmt$Day_no!=205  )
+
+dates_above_mmt<-dates_above_mmt[ind2,]
+rm(ind2)
+```
+
+### Find the boundary temperatures for all green spaces for all 40 hot days
+
+```{r valuing_all_days, echo = FALSE}
+
+###calculate boundary temperatures for all other 37 days above the MMT
+for (i in 1:NROW(dates_above_mmt)) {
+  column_name <- paste0("Temp_Day_", dates_above_mmt$Day_no[i])
+  Parks_grtr_1000[[column_name]] <- numeric(NROW(Parks_grtr_1000))
+}
+
+rm(column_name)
+
+# Finds the boundary temperature by adding the difference in average temperature between each day and the closest of the original three hot days to the boundary to the boundary temperature calculated for the closest of the original three hot days to the boundary 
+column_names<-names(Parks_grtr_1000)[(NCOL(Parks_grtr_1000)-36):NCOL(Parks_grtr_1000)]
+for (i in 1:NROW(dates_above_mmt)){
+  day_col<-paste0("diff_",parse_number(dates_above_mmt$min_diff[i]))
+  day_col_parks<-paste0("bt_",parse_number(dates_above_mmt$min_diff[i]))
+Parks_grtr_1000[[column_names[i]]]<-Parks_grtr_1000[[day_col_parks]]+(dates_above_mmt[[day_col]][i])
+  }
+
+
+```
+
+
+
+```{r calculate_lives_saved_value_all_days, echo = FALSE}
+## Creating custom functions
+
+# Create empty columns
+for (i in 1:NROW(dates_above_mmt)) {
+  column_name <- paste0("lives_saved_", dates_above_mmt$Day_no[i])
+  Parks_grtr_1000[[column_name]] <- numeric(NROW(Parks_grtr_1000))
+}
+
+for (i in 1:NROW(dates_above_mmt)) {
+  column_name <- paste0("value_", dates_above_mmt$Day_no[i])
+  Parks_grtr_1000[[column_name]] <- numeric(NROW(Parks_grtr_1000))
+}
+
+# where x is the  Parks_grtr_1000$pred_cooling[i]
+create_buff_dists<-function(x){
+   # create a sequence of values to the maximum cooling distance
+  Buff_vals<-seq(0,x, 30)
+  # Add an extra interval if the maximum cooling distance is more than 15 m greater than maximum interval value
+  if (x>(max(Buff_vals)+15)){
+    Buff_vals<-c(Buff_vals, max(Buff_vals)+30)
+  }
+  return(Buff_vals)
+}
+Pop$area_calc<-expanse(Pop)
+
+
+## Calculate populatiions within each 30 m buffer from the boundary to the maximum cooling distance
+calc_buff_pops<-function(Parks_shapefile, Buff_vals, Pop){
+  Buff_min_vals<-Buff_vals[1:(length(Buff_vals)-1)]
+  Buff_max_vals<-Buff_vals[2:length(Buff_vals)]
+  Buff_pop<-numeric(length(Buff_max_vals))
+  for (d in 1:length(Buff_min_vals)){
+    Buff_min<-terra::buffer(Parks_shapefile, width=Buff_min_vals[d])
+    Buff_max<-terra::buffer(Parks_shapefile, width=Buff_max_vals[d])
+    Buff_ring<-terra::symdif(Buff_max,Buff_min)
+    rm(Buff_max, Buff_min)
+    Pop_inter<-terra::intersect(Pop,Buff_ring)
+
+    Pop_inter$NewArea<-expanse(Pop_inter)
+    Pop_inter$New_Pop<-as.numeric(Pop_inter$POPMEN2016*(Pop_inter$NewArea/Pop_inter$area_calc))
+    Buff_pop[d]<-sum(Pop_inter$New_Pop)
+    rm(Buff_ring, Pop_inter)
+  }
+  return(Buff_pop)
+}
+
+
+for (i in 1:NROW(Parks_grtr_1000)){
+  
+  Buff_vals<-create_buff_dists( Parks_grtr_1000$pred_cooling[i])
+  if ( Parks_grtr_1000$pred_cooling[i]>=15){
+    Buff_pop<-calc_buff_pops(Parks_grtr_1000[i,], Buff_vals, Pop)
+    Buff_min_vals<-Buff_vals[1:(length(Buff_vals)-1)]
+    Buff_max_vals<-Buff_vals[2:length(Buff_vals)]
+    for (j in 1:NROW(dates_above_mmt)){
+      # find the temperature at the maximum cooling distance
+      col_ind<-which(match(names(Parks_grtr_1000), column_names[j])==1)
+      temp_at_boundary<-values(Parks_grtr_1000[i,col_ind]) %>%
+        unlist()
+      temp_at_max_dist<-temp_at_boundary+Parks_grtr_1000$pred_temp_[i]
+      temps_seq<-seq( temp_at_boundary,   temp_at_max_dist, length.out = length(Buff_vals))
+      temps_seq_mean<-rollapply(temps_seq, 2, mean, by = 1, align = "left", partial = TRUE, fill = NA)[1:length(Buff_min_vals)]
+      rm(temps_seq)
+      abs_diffs <- sapply(temps_seq_mean, function(x) abs(RRs_by_temp$Temperature - x))
+      ind_temp <- apply(abs_diffs, 2, which.min)
+      # Calculate expected deaths at each temperature within each 30 m buffer
+      deaths_at_temp<- ((mortality_rate_2019_paris*RRs_by_temp$RR[  ind_temp])/1000)*Buff_pop
+      rm(ind_temp)
+      # Calculate expected deaths at the peak temperature (as  if there was no cooling)
+      ind_pk<-which.min(abs(RRs_by_temp$Temperature - temp_at_max_dist))
+      deaths_at_pk_temp<- ((mortality_rate_2019_paris*RRs_by_temp$RR[ind_pk])/1000)*Buff_pop
+      # Calculate deaths prevented for each 30 m buffer 
+      lives_saved_seq<-deaths_at_pk_temp- deaths_at_temp
+      # Calculate value by multiplying the deaths prevented by the VSL
+      value_seq<-lives_saved_seq*VSL
+      column_name_lives<-gsub("Temp_Day_", "lives_saved_",column_names[j])
+      col_ind<-which(names(Parks_grtr_1000)==column_name_lives)
+      # Calculate the total deaths prevented and lives saved for each green space
+      Parks_grtr_1000[i, col_ind]<-sum(lives_saved_seq, na.rm =TRUE)
+      column_name_value<-gsub("Temp_Day_", "value_",column_names[j])
+      col_ind<-which(names(Parks_grtr_1000)== column_name_value)
+      Parks_grtr_1000[i, col_ind]<-sum(value_seq, na.rm = TRUE)
+      
+      rm(lives_saved_seq, value_seq, column_name_lives, column_name_value, ind_pk, deaths_at_pk_temp, deaths_at_temp, abs_diffs, temp_at_boundary, temp_at_max_dist, temps_seq_mean)
+      print(paste("j", j))
+    }
+    
+    print(paste("i", i))
+  }
+}
+
+names(Parks_grtr_1000)<-gsub("value", "v", names(Parks_grtr_1000))
+names(Parks_grtr_1000)<-gsub("lives_saved", "ls", names(Parks_grtr_1000))
+names(Parks_grtr_1000)<-gsub("Temp_Day", "bt", names(Parks_grtr_1000))
+
+# Save to shapefile
+writeVector(Parks_grtr_1000, "Parks_grtr_1000_with_values_25042024.shp")
+#st_write(Parks_grtr_1000, "Parks_grtr_1000_with_value.shp")
+```
+
+## Present deaths prevent descriptives
+```{r results_descriptives, echo = FALSE}
+
+lives_saved_cols<-grep("ls_", names(Parks_grtr_1000))
+
+# Calculate the total lives saved for each greenspace for all hot days
+total_lives_saved<-rowSums(as.data.frame(Parks_grtr_1000[,lives_saved_cols]), na.rm = TRUE)
+
+rm(lives_saved_cols)
+
+Parks_grtr_1000$ttl_ls<-total_lives_saved
+rm(total_lives_saved)
+ 
+print("Total lives saved")
+sum(total_lives_saved)
+print("Maximum lives saved per green space")
+max(total_lives_saved)
+
+# Calculate the deaths prevented for each greenspace as number of deaths prevented per m2 of greenspace area
+Parks_grtr_1000$ls_p_area<-Parks_grtr_1000$ttl_ls/Parks_grtr_1000$area_calc
+ 
+value_cols<-grep("v_", names(Parks_grtr_1000))
+# Calculate the total value for each green space for all hot days
+Parks_grtr_1000$ttl_val<-rowSums(as.data.frame(Parks_grtr_1000[,value_cols]), na.rm = TRUE)
+rm(value_cols)
+
+print("Total value")
+sum(Parks_grtr_1000$ttl_val)
+
+print("Max value per green space")
+max(Parks_grtr_1000$ttl_val)
+
+# Calculate the value per unit area
+Parks_grtr_1000$v_p_area<-Parks_grtr_1000$ttl_val/Parks_grtr_1000$area_calc
+
+Parks_grtr_1000$area_km2<-Parks_grtr_1000$area_calc/1000000
+Parks_grtr_1000$ls_p_km2<-Parks_grtr_1000$ttl_ls/Parks_grtr_1000$area_km2
+Parks_grtr_1000$v_p_km2<-Parks_grtr_1000$ttl_val/Parks_grtr_1000$area_km2
+
+Parks_grtr_1000$area_cat<-as.factor(Parks_grtr_1000$area_cat) %>%
+  factor(levels = c("1,000 - <5,000", "5,000 - <10,000", "10,000 - <100,000",   "100,000 - <1,000,000", ">=1,000,000"  ))
+
+# Prepare descriptives table
+descrptives<-Parks_grtr_1000 %>%
+  as.data.frame() %>%
+   group_by(area_cat) %>%
+   summarise(ls_median=median(ttl_ls, na.rm = TRUE),ls_mean=mean(ttl_ls, na.rm = TRUE), ls_km_median=median(ls_p_km2, na.rm = TRUE),ls_km_mean=mean(ls_p_km2, na.rm = TRUE),v_median=median(ttl_val, na.rm = TRUE),v_mean=mean(ttl_val, na.rm = TRUE), v_km_median=median(v_p_km2, na.rm = TRUE),v_km_mean=mean(v_p_km2, na.rm = TRUE) ) %>%
+  as_flextable() %>%
+  colformat_double(digits = 4)
+
+# print table
+descrptives
+rm(descrptives)
+#write.csv(descrptives, "lives_saved_val_descriptives.csv")
+
+```
+
+## Plot results
+```{r plot_map, echo = FALSE}
+
+# Plot histogram of value
+brks<-c(0,  100, 1000, 10000, 100000, 1000000, max(Parks_grtr_1000$ttl_val))
+
+labels<-c("0 - <100", "100 - <1,000", "1,000 - <10,000", "10,000 - <100,000", "100,000 - <1,000,000",">1,000,000")
+h<-hist(Parks_grtr_1000$ttl_val, breaks = brks, right = FALSE) 
+
+h_df<-data.frame("Counts"=h$counts, labels)
+h_df$labels<-as.factor(h_df$labels)
+h_df$labels<-factor(h_df$labels, levels = levels(h_df$labels)[c(2, 5, 3, 4, 6, 1)])
+
+p<-ggplot(h_df, aes(x = labels, y = Counts))+
+  geom_col()+
+  theme_minimal()+
+  xlab("Green space value (€)")+
+  ylab("Number of spaces")+
+  ylim(c(0, max(pretty(h_df$Counts))))+
+   theme(axis.text.x = element_text(angle = 15, vjust = 1, hjust=0.5))
+p
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("hist_value.png", width = 7, height = 3.5, units ="in")
+
+Parks_grtr_1000$Value_cats<-cut(Parks_grtr_1000$ttl_val,breaks=brks,labels = labels, right = FALSE,
+                           include.lowest =TRUE)
+
+rm(p, h_df, h, brks, labels)
+
+colour_pal<-brewer.pal(8, "RdYlBu")
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+central_depts<-vect("central_departments.shp")
+crs(central_depts)<-crs(Parks_grtr_1000)
+
+# Plot map of green spaces and their value
+p<-ggplot()+
+   geom_spatvector(data = Parks_grtr_1000,  aes(fill = Value_cats, colour = Value_cats))+
+  geom_spatvector(data = central_depts, colour = "black", fill = NA)+
+   theme_minimal()+
+  scale_fill_manual(name = "Value (€)",  values = colour_pal[c(1:3, 6:8)])+
+  scale_colour_manual(name = "Value (€)",  values = colour_pal[c(1:3, 6:8)])
+
+p
+setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+ggsave("map_values.png", width = 7, height = 3.5, units ="in", dpi = 300)
+```

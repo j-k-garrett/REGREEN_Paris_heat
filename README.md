@@ -32,3 +32,10 @@ Code is currently not reproducible as the data is not included
 Step 2
 - Calculate cooling effect for all green spaces in Paris >1,000m2 from the model coefficients
 - Calculate the population benefiting from the cooling of all green spaces
+
+`step_3_upscaling.rmd`
+- Calculates the boundary temperatures (-15m - greenspace boundary) for all green spaces >1,000m2 for three hot days
+- Calculates the expected lives saved and associated economic value for all green spaces >1,000m2 for three hot days
+- Calculates the expected lives saved and associated economic value for all green spaces >1,000m2 for all hot days
+- Plot results
+
