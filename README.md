@@ -5,7 +5,9 @@ R code for the REGREEN project funded paper "Quantifying the Health Benefits of 
 Joanne K. Garrett, Neil Bird, Tim Taylor, Elizabeth McCarthy, David Fletcher, Benedict W. Wheeler, Laurence Jones
 
 # Code description
-Code is currently not reproducible as the data is not included
+Code is currently not reproducible as the data is not included.
+
+Knit each script in order, at the beginning of each script, make sure all the required libraries are installed and set own locations for data and figure folders. 
 
 `greenspace_processing.rmd` 
 - Reads in the greenspace data
