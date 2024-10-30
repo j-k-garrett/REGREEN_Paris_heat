@@ -5,6 +5,7 @@ date: '2023-12-21'
 output: word_document
 ---
 ```{r libraries, message=FALSE, echo=FALSE, warning=FALSE}
+## Make sure all libraries are installed and set working directory locations to own locations
 library(dplyr)
 library(plyr)
 library(huxtable)
@@ -20,6 +21,11 @@ library(lmtest)
 library(gratia)
 library(terra)
 library(tidyterra)
+
+## set data working directory to own location
+data_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024"
+## set working directory for output figures to own location
+figure_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper"
 ```
 ## Step 1 - modelling
 
@@ -66,7 +72,7 @@ lmer_tbl_regression<-function(model_output){
 ```{r read_data, echo = FALSE}
 
 ## Read in data
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 step_1_results<-read.csv("step_1_resuts_575_150m_15042024.csv")
 ```
 
@@ -151,7 +157,7 @@ p<-ggplot(data=step_1_results, aes(x =area_cat, y = NDVI ))+
   xlab(expression("Greenspace area (m"^2~")"))+
   theme(axis.text.x = element_text(angle = 20, vjust =0.5, hjust = 0.5))
 p
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+setwd(figure_d)
 ggsave("boxplot_ndvi.png", dpi = 600, width = 4.5, height = 3.5)
 rm( p)
 ```
@@ -250,7 +256,7 @@ p2 <- gratia::draw(gam_model, select = "s(NDVI)") +
    ggtitle("b")
  
 plot_grid(p1, p2)
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+setwd(figured_d)
 ggsave("gam_plots_maximum_cool_dist.png", width = 7.5, height = 4, units ="in")
 summary(gam_model)
 
@@ -330,7 +336,7 @@ p2 <- gratia::draw(gam_model, select = "s(NDVI)") +
    ggtitle("d")
  
 plot_grid(p1, p2)
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+setwd(figure_d)
 ggsave("gam_plots_temp_diff.png", width = 7.5, height = 4, units ="in")
 
 summary(gam_model)
@@ -496,7 +502,7 @@ aligned <- align_plots( p_all_dist_by_area_line, p_all_dist_by_ndvi_line, p_all_
 
 ## Draw plots
 plot_grid(ggdraw(aligned[[1]]) , ggdraw(aligned[[2]]), ggdraw(aligned[[3]]), ggdraw(aligned[[4]])  )
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+setwd(figure_d)
 ggsave("temp_diff_dist_all_days.png",
        dpi = 600, height = 6, 
        width = 9)
@@ -556,7 +562,7 @@ hist_temp<-ggplot(h_temp, aes(x = Lowest_val, y = Counts, color=Day, fill = Day,
   ylim(c(0, 350))
 
 plot_grid(hist_dist, hist_temp)
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+setwd(figure_d)
 ggsave("temp_diff_dist_counts_all_days.png",
        dpi = 600, height = 3, 
        width = 9)
@@ -602,7 +608,7 @@ rm(area, dist_by_area, NDVI, dist_by_ndvi, df_area, df_ndvi, temp_by_ndvi, temp_
 ```{r read_parks, echo = FALSE}
 
 ## Set working directory
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 
 ## Load in parks data using terra package
 Parks_master<-vect("greenspaces_central.shp")
@@ -741,7 +747,7 @@ p2<-ggplot(h_df, aes(x = bin_labels, y =Counts ))+
 aligned <- align_plots( p1, p2,align = "hv")
 
 plot_grid(ggdraw(aligned[[1]]) , ggdraw(aligned[[2]]) )
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+setwd(figure_d)
 ggsave("pred_cooling_effects_hist.png",
        dpi = 600, height = 4.75, 
        width = 10.5)
@@ -772,7 +778,7 @@ rm(Parks_grtr_1000_df, summary_pred)
 ```{r population_data, echo = FALSE}
 ## Population data
 
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 
 Pop<-vect("densibati_central_ile_de_france.shp") %>%
   makeValid()
@@ -783,7 +789,7 @@ total_pop<-sum(Pop$POPMEN2016,na.rm = TRUE)
 
 ```{r parks_max_cd_buff, echo = FALSE}
 
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 writeVector(Parks_grtr_1000, "Parks_grtr_1000_with_preds.shp")
 #Parks_grtr_1000<-vect("Parks_grtr_1000_with_preds.shp")
 
@@ -836,7 +842,7 @@ p<-ggplot()+
     scale_colour_manual(values =c("gray90"="gray90","gray34"="gray34",  "darkseagreen"= "darkseagreen"),guide = 'none', labels = c("Public green spaces", "Maximum cooling distance", "Buildings"))
 p
 
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper")
+setwd(figure_d)
 ggsave("map_greenspaces_mcd.png", dpi = 600, width = 6, height = 5)
 
 ```
