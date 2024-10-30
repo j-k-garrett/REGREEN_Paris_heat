@@ -16,6 +16,8 @@ output:
 ---
 
 ```{r load_packages, echo = FALSE, warning = FALSE, message = FALSE}
+
+## Make sure all libraries are installed and set data and figure directories to own directories
 library(cowplot)
 library(dplyr)
 library(flextable)
@@ -37,7 +39,8 @@ library(tibble)
 library(tidyr)
 library(zoo)
 
-
+data_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024"
+figure_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper"
 ```
 ## 1. Read in greenspace data
 
@@ -47,7 +50,7 @@ library(zoo)
 ```{r read_parks, echo = FALSE}
 
 ## Set working directory
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 
 ## Load in parks data using terra package
 Parks_master<-vect("greenspaces_central.shp")
@@ -87,7 +90,7 @@ parks_bounding<-ext(Parks_grtr_1000) %>%
 ```{r read_temp_data, echo =FALSE}
 
 ## Set working directory
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 
 ## Read in data
 temp_proj_191<-rast("Temp_data\\2019191_TAVG.tif") %>%
@@ -113,7 +116,7 @@ temp_proj_205<-rast("Temp_data\\2019205_TAVG.tif") %>%
 
 ```{r read_NDVI, echo = FALSE}
 ## Set working directory
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 ## Read in NDVI and attach to parks data
 NDVI<-rast("2019191_interpolated_NDVI.tif") %>%
   terra::project( "EPSG:2154") %>%
@@ -195,7 +198,7 @@ p<-ggplot(distance_counts, aes(x = labels, y = Counts))+
   xlab("Distance to nearest (m)")
 p
 
-ggsave(file.path("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024\\Figs_for_paper", "S5_Paris_region_distance_to_others.png"), dpi = 300, width = 7, height = 2.5)
+ggsave(file.path(figure_d, "S5_Paris_region_distance_to_others.png"), dpi = 300, width = 7, height = 2.5)
 
 
 ## print table of distance categories and their counts
