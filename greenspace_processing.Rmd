@@ -6,11 +6,13 @@ output: word_document
 ---
 
 ```{r libraries, echo = FALSE}
+## Make sure all libraries are installed and change data_d to own data directory
 library(terra)
 library(dplyr)
 library(sf)
 library(nngeo)
 
+## save data directory
 data_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib"
 ```
 
