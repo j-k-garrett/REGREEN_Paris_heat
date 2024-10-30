@@ -11,12 +11,13 @@ library(dplyr)
 library(sf)
 library(nngeo)
 
+data_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib"
 ```
 
 ## 1. Read in data
 ## 2. Exclude spaces that are planned
 ```{r read_data, echo = FALSE}
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\green-spaces-woods-open-or-planned-to-open-to-the-public")
+setwd(file.path(data_d, "green-spaces-woods-open-or-planned-to-open-to-the-public"))
 greenspaces_raw<-vect("espaces-verts-et-boises-surfaciques-ouverts-ou-en-projets-douverture-au-public.shp") %>%
   makeValid()
 
@@ -125,7 +126,7 @@ rm(nearest_neighbour)
 ## 6. Select green spaces within the four central departments of Paris
 ```{r read_central, echo =FALSE}
 
-setwd("E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024")
+setwd(data_d)
 central_region<-vect("central_departments.shp") 
 crs(central_region)<-"EPSG:2154"
 
