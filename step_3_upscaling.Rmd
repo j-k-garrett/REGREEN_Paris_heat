@@ -105,6 +105,7 @@ Parks_grtr_1000$bt_203<-boundary_temp$boundary_temp_203
 Parks_grtr_1000$bt_205<-boundary_temp$boundary_temp_205
 
 rm(boundary_temp)
+
 ```
 
 ### Plot the boundary temperatures
@@ -213,7 +214,7 @@ rm(p)
 mortality_rate_2019_paris<-6.065503/365
 # Value of a statistical life
 
-VSL = 4680000
+VSL = 3600000*(104.8/100.24)
 ```
 
 ## Calculate lives saved and associated economic value for the three hot days
@@ -234,7 +235,7 @@ ind<-which(Parks_grtr_1000$pred_cooling<0)
 Parks_grtr_1000$pred_cooling[ind]<-0
 rm(ind)
 
-# 
+
 for (i in 1:NROW(Parks_grtr_1000)){
   if (Parks_grtr_1000$pred_cooling[i]>=15){
 
@@ -334,7 +335,8 @@ orly_temp<-read.csv("Paris_Orly_temp.csv")
 ind<-which(orly_temp$TAVG>21.6)
 dates_above_mmt<-orly_temp[ind,]
 rm(ind)
- dates_above_mmt$dates_as_date<- as.Date(dates_above_mmt$DATE,format = "%d/%m/%Y")
+
+dates_above_mmt$dates_as_date<- as.Date(dates_above_mmt$DATE,format = "%d/%m/%Y")
 
 ind<-which(dates_above_mmt$Day_no==191 | dates_above_mmt$Day_no==203 | dates_above_mmt$Day_no==205)
 
@@ -387,7 +389,7 @@ Parks_grtr_1000[[column_names[i]]]<-Parks_grtr_1000[[day_col_parks]]+(dates_abov
 
 
 ```{r calculate_lives_saved_value_all_days, echo = FALSE}
-## Creating custom functions
+## Running this 10 th Sept 2025
 
 # Create empty columns
 for (i in 1:NROW(dates_above_mmt)) {
@@ -483,7 +485,7 @@ names(Parks_grtr_1000)<-gsub("lives_saved", "ls", names(Parks_grtr_1000))
 names(Parks_grtr_1000)<-gsub("Temp_Day", "bt", names(Parks_grtr_1000))
 
 # Save to shapefile
-writeVector(Parks_grtr_1000, "Parks_grtr_1000_with_values_25042024.shp")
+writeVector(Parks_grtr_1000, "Parks_grtr_1000_with_values_08092025.shp")
 #st_write(Parks_grtr_1000, "Parks_grtr_1000_with_value.shp")
 ```
 
@@ -498,13 +500,13 @@ total_lives_saved<-rowSums(as.data.frame(Parks_grtr_1000[,lives_saved_cols]), na
 rm(lives_saved_cols)
 
 Parks_grtr_1000$ttl_ls<-total_lives_saved
-rm(total_lives_saved)
- 
+
 print("Total lives saved")
 sum(total_lives_saved)
+
 print("Maximum lives saved per green space")
 max(total_lives_saved)
-
+rm(total_lives_saved)
 # Calculate the deaths prevented for each greenspace as number of deaths prevented per m2 of greenspace area
 Parks_grtr_1000$ls_p_area<-Parks_grtr_1000$ttl_ls/Parks_grtr_1000$area_calc
  
@@ -530,18 +532,22 @@ Parks_grtr_1000$area_cat<-as.factor(Parks_grtr_1000$area_cat) %>%
   factor(levels = c("1,000 - <5,000", "5,000 - <10,000", "10,000 - <100,000",   "100,000 - <1,000,000", ">=1,000,000"  ))
 
 # Prepare descriptives table
+
 descrptives<-Parks_grtr_1000 %>%
   as.data.frame() %>%
    group_by(area_cat) %>%
-   summarise(ls_median=median(ttl_ls, na.rm = TRUE),ls_mean=mean(ttl_ls, na.rm = TRUE), ls_km_median=median(ls_p_km2, na.rm = TRUE),ls_km_mean=mean(ls_p_km2, na.rm = TRUE),v_median=median(ttl_val, na.rm = TRUE),v_mean=mean(ttl_val, na.rm = TRUE), v_km_median=median(v_p_km2, na.rm = TRUE),v_km_mean=mean(v_p_km2, na.rm = TRUE) ) %>%
+   summarise(ls_median=median(ttl_ls, na.rm = TRUE),ls_mean=mean(ttl_ls, na.rm = TRUE), ls_km_median=median(ls_p_km2, na.rm = TRUE),ls_km_mean=mean(ls_p_km2, na.rm = TRUE),v_median=median(ttl_val, na.rm = TRUE),v_mean=mean(ttl_val, na.rm = TRUE), v_km_median=median(v_p_km2, na.rm = TRUE),v_km_mean=mean(v_p_km2, na.rm = TRUE) ) 
+
+write.csv(descrptives, "lives_saved_val_descriptives2.csv")
+descrptives<-descrptives %>%
   as_flextable() %>%
   colformat_double(digits = 4)
 
 # print table
 descrptives
-rm(descrptives)
-#write.csv(descrptives, "lives_saved_val_descriptives.csv")
 
+#write.csv(descrptives, "lives_saved_val_descriptives.csv")
+rm(descrptives)
 ```
 
 ## Plot results
