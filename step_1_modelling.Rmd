@@ -150,8 +150,11 @@ mean_NDVI <- ddply(step_1_results, "area_cat", summarise, Mean.NDVI=mean(NDVI), 
 mean_NDVI
 rm(mean_NDVI)
 
-p<-ggplot(data=step_1_results, aes(x =area_cat, y = NDVI ))+
-  geom_boxplot(notch = FALSE)+
+## Boxplot with whiskers at the 1st and 99th percentile. outliers excluded
+p<-ggplot(data=step_1_results, aes(x =area_cat, y = NDVI ))+ 
+  stat_summary(geom = "boxplot",   fun.data = function(x) setNames(quantile(x, c(0.01, 0.25, 0.5, 0.75, 0.99)), 
+                                                 c("ymin", "lower", "middle", "upper", "ymax")))+
+   # geom_boxplot(notch = FALSE)+
   theme_minimal() +
   ylab("NDVI")+
   xlab(expression("Greenspace area (m"^2~")"))+
