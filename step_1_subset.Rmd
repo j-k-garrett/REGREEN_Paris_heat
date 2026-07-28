@@ -198,7 +198,7 @@ p<-ggplot(distance_counts, aes(x = labels, y = Counts))+
   xlab("Distance to nearest (m)")
 p
 
-ggsave(file.path(figure_d, "S5_Paris_region_distance_to_others.png"), dpi = 300, width = 7, height = 2.5)
+ggsave(file.path(figure_d, "S5_Paris_region_distance_to_others.png"), dpi = 300, width = 7, height = 2.5, bg = "white")
 
 
 ## print table of distance categories and their counts

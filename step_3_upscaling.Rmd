@@ -152,7 +152,7 @@ p3<-ggplot(data = h_df, aes(x = Mids, y = Percent))+
 
 plot_grid(p1, p2, p3, nrow = 2, ncol = 2, align = "hv")
 setwd(figure_d)
-ggsave("temps_boundaries_three_days.png", dpi = 300, width = 7, height = 4)
+ggsave("temps_boundaries_three_days.png", dpi = 300, width = 7, height = 4, bg = "white")
 
 rm(p1, p2, p3, h, h_df, brks)
 
@@ -207,7 +207,7 @@ p<-ggplot(RRs_by_temp, aes(x = Temperature, y = RR))+
   xlab("Temperature (°C)")
 
 setwd(figure_d)
-ggsave("RR_mortality_by_temp.png", dpi = 300, height = 3, width = 3.5)
+ggsave("RR_mortality_by_temp.png", dpi = 300, height = 3, width = 3.5, bg = "white")
 rm(p)
 
 ## Mortality rate Paris
@@ -389,7 +389,6 @@ Parks_grtr_1000[[column_names[i]]]<-Parks_grtr_1000[[day_col_parks]]+(dates_abov
 
 
 ```{r calculate_lives_saved_value_all_days, echo = FALSE}
-## Running this 10 th Sept 2025
 
 # Create empty columns
 for (i in 1:NROW(dates_above_mmt)) {
@@ -485,7 +484,7 @@ names(Parks_grtr_1000)<-gsub("lives_saved", "ls", names(Parks_grtr_1000))
 names(Parks_grtr_1000)<-gsub("Temp_Day", "bt", names(Parks_grtr_1000))
 
 # Save to shapefile
-writeVector(Parks_grtr_1000, "Parks_grtr_1000_with_values_08092025.shp")
+writeVector(Parks_grtr_1000, paste0("Parks_grtr_1000_with_values_",Sys.Date(),".shp"))
 #st_write(Parks_grtr_1000, "Parks_grtr_1000_with_value.shp")
 ```
 
@@ -572,7 +571,7 @@ p<-ggplot(h_df, aes(x = labels, y = Counts))+
    theme(axis.text.x = element_text(angle = 15, vjust = 1, hjust=0.5))
 p
 setwd(figure_d)
-ggsave("hist_value.png", width = 7, height = 3.5, units ="in")
+ggsave("hist_value.png", width = 7, height = 3.5, units ="in", bg = "white")
 
 Parks_grtr_1000$Value_cats<-cut(Parks_grtr_1000$ttl_val,breaks=brks,labels = labels, right = FALSE,
                            include.lowest =TRUE)
@@ -594,5 +593,5 @@ p<-ggplot()+
 
 p
 setwd(figure_d)
-ggsave("map_values.png", width = 7, height = 3.5, units ="in", dpi = 300)
+ggsave("map_values.png", width = 7, height = 3.5, units ="in", dpi = 300, bg = "white")
 ```
