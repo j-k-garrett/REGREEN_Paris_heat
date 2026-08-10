@@ -161,7 +161,7 @@ p<-ggplot(data=step_1_results, aes(x =area_cat, y = NDVI ))+
   theme(axis.text.x = element_text(angle = 20, vjust =0.5, hjust = 0.5))
 p
 setwd(figure_d)
-ggsave("boxplot_ndvi.png", dpi = 600, width = 4.5, height = 3.5)
+ggsave("boxplot_ndvi.png", dpi = 600, width = 4.5, height = 3.5, bg = "white")
 rm( p)
 ```
 
@@ -260,7 +260,7 @@ p2 <- gratia::draw(gam_model, select = "s(NDVI)") +
  
 plot_grid(p1, p2)
 setwd(figured_d)
-ggsave("gam_plots_maximum_cool_dist.png", width = 7.5, height = 4, units ="in")
+ggsave("gam_plots_maximum_cool_dist.png", width = 7.5, height = 4, units ="in", bg = "white")
 summary(gam_model)
 
 rm(gam_model, p1, p2)
@@ -340,7 +340,7 @@ p2 <- gratia::draw(gam_model, select = "s(NDVI)") +
  
 plot_grid(p1, p2)
 setwd(figure_d)
-ggsave("gam_plots_temp_diff.png", width = 7.5, height = 4, units ="in")
+ggsave("gam_plots_temp_diff.png", width = 7.5, height = 4, units ="in", bg = "white")
 
 summary(gam_model)
 rm(gam_model, p1, p2)
@@ -508,7 +508,7 @@ plot_grid(ggdraw(aligned[[1]]) , ggdraw(aligned[[2]]), ggdraw(aligned[[3]]), ggd
 setwd(figure_d)
 ggsave("temp_diff_dist_all_days.png",
        dpi = 600, height = 6, 
-       width = 9)
+       width = 9, bg = "white")
 
 rm(aligned, p_all_dist_by_area, p_all_dist_by_area_line, p_all_dist_by_NDVI, p_all_dist_by_ndvi_line, p_all_temp_by_area, p_all_temp_by_area_line, p_all_temp_by_NDVI, p_all_temp_by_ndvi_line, line_dist_area, line_dist_ndvi, line_temp_area, line_temp_ndvi, lm_cd_re, lm_td_re)
 
@@ -568,7 +568,7 @@ plot_grid(hist_dist, hist_temp)
 setwd(figure_d)
 ggsave("temp_diff_dist_counts_all_days.png",
        dpi = 600, height = 3, 
-       width = 9)
+       width = 9, bg = "white")
 
 rm(brks, h_191, h_205,h_203, h_temp,  hist_dist, hist_temp, step_1_results_long_dist, step_1_results_long_temp, step_1_results)
 ```
@@ -753,7 +753,7 @@ plot_grid(ggdraw(aligned[[1]]) , ggdraw(aligned[[2]]) )
 setwd(figure_d)
 ggsave("pred_cooling_effects_hist.png",
        dpi = 600, height = 4.75, 
-       width = 10.5)
+       width = 10.5, bg = "white")
 
 rm(aligned, p1, p2, h_df, bin_labels, bins_dist, h)
 ```
@@ -846,7 +846,7 @@ p<-ggplot()+
 p
 
 setwd(figure_d)
-ggsave("map_greenspaces_mcd.png", dpi = 600, width = 6, height = 5)
+ggsave("map_greenspaces_mcd.png", dpi = 600, width = 6, height = 5, bg = "white")
 
 ```
 

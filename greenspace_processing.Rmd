@@ -13,7 +13,7 @@ library(sf)
 library(nngeo)
 
 ## save data directory
-data_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib"
+data_d<-"E:\\Projects\\Users\\JoGarrett\\REGREEN_crib\\Analysis_2024"
 ```
 
 ## 1. Read in data
@@ -55,7 +55,8 @@ greenspaces_buff$area_terra<-expanse(greenspaces_buff)
 ## 4. Find the distance to the nearest green space
 ```{r find_nearest_distance, echo = FALSE}
 
-greenspaces_sf <- sf::st_as_sf(greenspaces_buff)
+greenspaces_sf <- sf::st_as_sf(greenspaces_buff) %>%
+  st_make_valid()
 
 
 nn <- st_nn(greenspaces_sf,y = greenspaces_sf, k = 2, maxdist = 500)  # Finding 2 nearest neighbors, the first one will be itself
@@ -89,7 +90,7 @@ rm(nearest_neighbour)
 
 ## 5. Find the distance to the nearest water body
 ```{r find_nearest_water_body, echo = FALSE}
-water_bodies<-st_read("water_paris_polygon_osm.shp") %>%
+water_bodies<-st_read(paste0(data_d,"\\Analysis_2024\\water_paris_polygon_osm.shp")) %>%
   st_make_valid()
 
 nn <- st_nn(greenspaces_sf,y = water_bodies, k = 1, maxdist = 500)  # Finding nearest neighbors
@@ -143,7 +144,7 @@ rm(relates_ind)
 
 rm(central_dis, central_region)
 
-writeVector(greenspaces_central, "greenspaces_central.shp")
+writeVector(greenspaces_central,paste0("greenspaces_central_",Sys.Date(),".shp"))
 ```
 
 
