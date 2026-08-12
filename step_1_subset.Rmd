@@ -4,7 +4,6 @@ author: "Jo Garrett"
 date: '2023-06-28'
 output: 
   officedown::rdocx_document:
-    reference_docx: ref_doc.docx
     page_margins:
       bottom: 0.2
       top: 0.5
@@ -231,6 +230,7 @@ range(Parks_master_150m_dist$area_terra)
 ```{r analysis, echo = FALSE}
 
 ## Create empty data.frames
+
 Min_dist<-data.frame(Min_dist_191= numeric(NROW(Parks_master_150m_dist)), Min_dist_203= numeric(NROW(Parks_master_150m_dist)), Min_dist_205= numeric(NROW(Parks_master_150m_dist)))
 
 Max_dist<-data.frame(Max_dist_191= numeric(NROW(Parks_master_150m_dist)), Max_dist_203= numeric(NROW(Parks_master_150m_dist)), Max_dist_205= numeric(NROW(Parks_master_150m_dist)))
@@ -247,6 +247,7 @@ for (i in 1:length(labels)){
 }
 rm( i) 
 
+
 ## run analysis on each greenspace in the subset for each temperature day
 for (i in 1:NROW(Parks_master_150m_dist)){
   mean_temp_191<-numeric(length=(length(brks))-1)
@@ -257,10 +258,10 @@ for (i in 1:NROW(Parks_master_150m_dist)){
     # Create a buffer at the interval minimum
     Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=brks[j])
     ## Where -15 m from the boundary has zero area, try -10 m and then -5 m to calculate boundary temperature
-    if (j == 1 & expanse(Buff_min) == 0){
+    if (j == 1 & length(expanse(Buff_min)) == 0){
       Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=-10)
     }
-    if (j == 1 & expanse(Buff_min) == 0){
+    if (j == 1 & length(expanse(Buff_min)) == 0){
       Buff_min<-terra::buffer(Parks_master_150m_dist[i,], width=-5)
     }
     # Create a buffer at the interval minimum
@@ -325,7 +326,7 @@ rm(temp_diff_191, temp_diff_203, temp_diff_205)
 step_1_results<-data.frame(boundary_temp, mean_temp_at_peak, temp_diff, "park_area"=Parks_master_150m_dist$area_terra, Min_dist, Max_dist, "NDVI"=Parks_master_150m_dist$NDVI)
 
 ## Save results
-write.csv(step_1_results, "step_1_resuts_575_150m_15042024.csv")
+write.csv(step_1_results, paste0("step_1_resuts_575_150m_",Sys.Date(),".csv"))
 rm( boundary_temp, mean_temp_at_peak, temp_diff, Min_dist, Max_dist)
 
 ```

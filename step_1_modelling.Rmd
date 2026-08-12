@@ -73,7 +73,8 @@ lmer_tbl_regression<-function(model_output){
 
 ## Read in data
 setwd(data_d)
-step_1_results<-read.csv("step_1_resuts_575_150m_15042024.csv")
+step_1_results_files<-dir(pattern = "step_1_resuts_575_150m")
+step_1_results<-read.csv(step_1_results_files)
 ```
 
 ## Descriptives
@@ -259,8 +260,8 @@ p2 <- gratia::draw(gam_model, select = "s(NDVI)") +
    ggtitle("b")
  
 plot_grid(p1, p2)
-setwd(figured_d)
-ggsave("gam_plots_maximum_cool_dist.png", width = 7.5, height = 4, units ="in", bg = "white")
+setwd(figure_d)
+ggsave("gam_plots_maximum_cool1_dist.png", width = 7.5, height = 4, units ="in", bg = "white")
 summary(gam_model)
 
 rm(gam_model, p1, p2)
@@ -654,7 +655,7 @@ parks_bounding<-ext(Parks_grtr_1000) %>%
 ### Read NDVI
 
 ```{r read_NDVI, echo = FALSE}
-
+setwd(data_d)
 ## Read in NDVI and attach to parks data
 NDVI<-rast("2019191_interpolated_NDVI.tif") %>%
   terra::project( "EPSG:2154") %>%
@@ -782,7 +783,7 @@ rm(Parks_grtr_1000_df, summary_pred)
 ## Population data
 
 setwd(data_d)
-
+## up to here
 Pop<-vect("densibati_central_ile_de_france.shp") %>%
   makeValid()
 
@@ -793,7 +794,7 @@ total_pop<-sum(Pop$POPMEN2016,na.rm = TRUE)
 ```{r parks_max_cd_buff, echo = FALSE}
 
 setwd(data_d)
-writeVector(Parks_grtr_1000, "Parks_grtr_1000_with_preds.shp")
+writeVector(Parks_grtr_1000, paste0("Parks_grtr_1000_with_preds_",Sys.Date(),".shp"))
 #Parks_grtr_1000<-vect("Parks_grtr_1000_with_preds.shp")
 
 ## Calculate buffers for all green spaces for a width of the maximum cooling distance
